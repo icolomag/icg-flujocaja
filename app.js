@@ -3,7 +3,7 @@ const CONFIG = {
   CLIENT_ID: '467340891750-aerhtg34qdjrj9rdbkqdmr603f5msvk9.apps.googleusercontent.com',
   SHEET_ID:  '14KUDiLI6Gw-YcGXlfdc3bSorur8p6tOYTJvaeBGR6HQ',
   SCOPES:    'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/gmail.readonly',
-  ANTHROPIC_KEY: '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'  // ← reemplaza con tu key real
+  ANTHROPIC_KEY: '',
 };
 
 const DOMINIOS_BANCARIOS = [
@@ -807,7 +807,7 @@ Si no ves movimientos claros en la imagen, responde: []`;
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': CONFIG.ANTHROPIC_KEY,
+        'x-api-key': document.getElementById('campo-apikey')?.value || CONFIG.ANTHROPIC_KEY,
         'anthropic-version': '2023-06-01',
         'anthropic-dangerous-direct-browser-access': 'true'
       },
@@ -1095,7 +1095,7 @@ INSTRUCCIONES:
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': CONFIG.ANTHROPIC_KEY,
+        'x-api-key': document.getElementById('campo-apikey')?.value || CONFIG.ANTHROPIC_KEY,
         'anthropic-version': '2023-06-01',
         'anthropic-dangerous-direct-browser-access': 'true'
       },
