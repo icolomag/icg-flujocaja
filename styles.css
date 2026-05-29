@@ -541,5 +541,17 @@ tr:hover td { background: var(--bg2); }
 .barra-alerta { background: var(--amarillo); }
 .barra-excedido { background: var(--rojo); }
 
+/* API KEY INPUT */
+.apikey-input {
+  background: var(--bg3);
+  border: 1px solid var(--borde);
+  color: var(--texto);
+  padding: 6px 10px;
+  border-radius: var(--radio);
+  font-size: 12px;
+  width: 200px;
+}
+.apikey-input:focus { outline: none; border-color: var(--acento); }
+
 Cuando hayas aplicado los tres cambios (app.js completo, nav + vista en index.html, estilos en styles.css), recarga la app en el navegador, vuelve a hacer login y ve a la pestaña Gmail.
 Confírmame qué ves.
