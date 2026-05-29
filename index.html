@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ICG Flujo de Caja</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- LOGIN -->
+  <div id="pantalla-login" class="pantalla">
+    <div class="login-box">
+      <div class="login-logo">₿</div>
+      <h1>ICG Flujo de Caja</h1>
+      <p>Sistema personal de gestión financiera</p>
+      <button id="btn-login" class="btn-google">
+        <svg width="20" height="20" viewBox="0 0 48 48">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          <path fill="none" d="M0 0h48v48H0z"/>
+        </svg>
+        Entrar con Google
+      </button>
+    </div>
+  </div>
+
+  <!-- APP PRINCIPAL -->
+  <div id="pantalla-app" class="pantalla oculto">
+
+    <!-- HEADER -->
+    <header>
+      <div class="header-left">
+        <span class="header-logo">₿</span>
+        <span class="header-titulo">ICG Flujo de Caja</span>
+      </div>
+      <div class="header-right">
+        <span id="usuario-nombre"></span>
+        <button id="btn-logout" class="btn-secundario">Salir</button>
+      </div>
+    </header>
+
+    <!-- NAV -->
+    <nav>
+      <button class="nav-btn activo" data-vista="dashboard">Dashboard</button>
+      <button class="nav-btn" data-vista="transaccion">+ Transacción</button>
+      <button class="nav-btn" data-vista="traslado">⇄ Traslado</button>
+      <button class="nav-btn" data-vista="historial">Historial</button>
+      <button class="nav-btn" data-vista="gmail">📧 Gmail</button>
+      <button class="nav-btn" data-vista="imagen">📷 Imagen</button>
+      <button class="nav-btn" data-vista="asistente">🤖 Asistente</button>
+      <button class="nav-btn" data-vista="proyeccion">📈 Proyección</button>
+      <button class="nav-btn" data-vista="presupuesto">📊 vs Presupuesto</button>
+    </nav>
+
+    <!-- CONTENIDO -->
+    <main>
+
+      <!-- VISTA: DASHBOARD -->
+      <div id="vista-dashboard" class="vista">
+        <div class="seccion-titulo">
+          <h2>Saldos actuales</h2>
+          <button id="btn-actualizar" class="btn-secundario">↻ Actualizar</button>
+        </div>
+
+        <div class="cards-grupo">
+          <h3>💰 Disponible</h3>
+          <div id="cards-disponible" class="cards-grid"></div>
+          <div class="total-grupo">
+            Total disponible: <strong id="total-disponible">$0</strong>
+          </div>
+        </div>
+
+        <div class="cards-grupo">
+          <h3>🔒 No disponible (inversiones LP)</h3>
+          <div id="cards-no-disponible" class="cards-grid"></div>
+          <div class="total-grupo">
+            Total no disponible: <strong id="total-no-disponible">$0</strong>
+          </div>
+        </div>
+
+        <div class="cards-grupo">
+          <h3>💳 Deudas</h3>
+          <div id="cards-deudas" class="cards-grid"></div>
+          <div class="total-grupo">
+            Total deudas: <strong id="total-deudas">$0</strong>
+          </div>
+        </div>
+
+        <div class="resumen-patrimonio">
+          <div class="patrimonio-item">
+            <span>Activos disponibles</span>
+            <strong id="pat-activos" class="verde">$0</strong>
+          </div>
+          <div class="patrimonio-item">
+            <span>Inversiones LP</span>
+            <strong id="pat-inversiones" class="verde">$0</strong>
+          </div>
+          <div class="patrimonio-item">
+            <span>Deudas totales</span>
+            <strong id="pat-deudas" class="rojo">$0</strong>
+          </div>
+          <div class="patrimonio-item patrimonio-neto">
+            <span>Patrimonio neto</span>
+            <strong id="pat-neto">$0</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- VISTA: NUEVA TRANSACCIÓN -->
+      <div id="vista-transaccion" class="vista oculto">
+        <h2>Registrar transacción</h2>
+        <div class="formulario">
+          <div class="campo">
+            <label>Fecha</label>
+            <input type="date" id="tx-fecha" />
+          </div>
+          <div class="campo">
+            <label>Tipo</label>
+            <select id="tx-tipo">
+              <option value="">— Selecciona —</option>
+              <option value="Ingreso">Ingreso</option>
+              <option value="Egreso">Egreso</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label>Grupo</label>
+            <select id="tx-grupo" disabled>
+              <option value="">— Primero selecciona tipo —</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label>Subgrupo</label>
+            <select id="tx-subgrupo" disabled>
+              <option value="">— Primero selecciona grupo —</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label>Producto</label>
+            <select id="tx-producto">
+              <option value="">— Selecciona cuenta/tarjeta —</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label>Monto (COP)</label>
+            <input type="number" id="tx-monto" placeholder="0" min="0" />
+          </div>
+          <div class="campo">
+            <label>Descripción</label>
+            <input type="text" id="tx-descripcion" placeholder="Ej: Pago hipoteca mayo" />
+          </div>
+          <div class="campo">
+            <label>Notas (opcional)</label>
+            <input type="text" id="tx-notas" placeholder="" />
+          </div>
+          <div class="campo-accion">
+            <div id="tx-preview" class="preview oculto"></div>
+            <button id="btn-tx-preview" class="btn-primario">Vista previa</button>
+            <button id="btn-tx-guardar" class="btn-confirmar oculto">✓ Confirmar y guardar</button>
+            <button id="btn-tx-cancelar" class="btn-secundario oculto">Cancelar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- VISTA: TRASLADO -->
+      <div id="vista-traslado" class="vista oculto">
+        <h2>Traslado entre cuentas</h2>
+        <div class="formulario">
+          <div class="campo">
+            <label>Fecha</label>
+            <input type="date" id="tr-fecha" />
+          </div>
+          <div class="campo">
+            <label>Cuenta origen</label>
+            <select id="tr-origen">
+              <option value="">— Selecciona —</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label>Cuenta destino</label>
+            <select id="tr-destino">
+              <option value="">— Selecciona —</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label>Monto (COP)</label>
+            <input type="number" id="tr-monto" placeholder="0" min="0" />
+          </div>
+          <div class="campo">
+            <label>Descripción</label>
+            <input type="text" id="tr-descripcion" placeholder="Ej: Paso excedentes a Fiducuenta" />
+          </div>
+          <div class="campo-accion">
+            <div id="tr-preview" class="preview oculto"></div>
+            <button id="btn-tr-preview" class="btn-primario">Vista previa</button>
+            <button id="btn-tr-guardar" class="btn-confirmar oculto">✓ Confirmar y guardar</button>
+            <button id="btn-tr-cancelar" class="btn-secundario oculto">Cancelar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- VISTA: HISTORIAL -->
+      <div id="vista-historial" class="vista oculto">
+        <div class="seccion-titulo">
+          <h2>Historial de transacciones</h2>
+        </div>
+        <div class="filtros">
+          <select id="filtro-tipo">
+            <option value="">Todos los tipos</option>
+            <option value="Ingreso">Ingresos</option>
+            <option value="Egreso">Egresos</option>
+            <option value="Traslado">Traslados</option>
+          </select>
+          <select id="filtro-grupo">
+            <option value="">Todos los grupos</option>
+          </select>
+          <button id="btn-filtrar" class="btn-secundario">Filtrar</button>
+        </div>
+        <div id="tabla-historial" class="tabla-contenedor"></div>
+      </div>
+
+      <!-- VISTA: GMAIL -->
+      <div id="vista-gmail" class="vista oculto">
+        <div class="seccion-titulo">
+          <h2>Notificaciones bancarias</h2>
+          <button id="btn-recargar-gmail" class="btn-secundario" onclick="leerCorreosBancarios()">↻ Recargar</button>
+        </div>
+        <p style="color:var(--texto2);font-size:13px;margin-bottom:20px">
+          Correos de los últimos 7 días. Revisa cada uno y confirma los que quieras registrar.
+        </p>
+        <div id="gmail-lista"></div>
+      </div>
+
+      <!-- VISTA: IMAGEN -->
+      <div id="vista-imagen" class="vista oculto">
+        <div class="seccion-titulo">
+          <h2>Captura de movimientos</h2>
+        </div>
+        <p style="color:var(--texto2);font-size:13px;margin-bottom:20px">
+          Sube una captura de pantalla de tu app bancaria. Claude extrae los movimientos y los concilia contra lo ya registrado.
+        </p>
+        <div class="imagen-upload-area" id="imagen-upload-area">
+          <input type="file" id="imagen-input" accept="image/*" style="display:none" />
+          <div id="imagen-placeholder" class="imagen-placeholder">
+            <div style="font-size:48px">📷</div>
+            <div>Toca para seleccionar una imagen</div>
+            <div style="font-size:12px;color:var(--texto2);margin-top:8px">JPG, PNG — capturas de apps bancarias</div>
+          </div>
+          <img id="imagen-preview" class="imagen-preview oculto" />
+        </div>
+        <div class="imagen-acciones" id="imagen-acciones" style="display:none">
+          <button id="btn-analizar-imagen" class="btn-primario">🔍 Analizar con Claude</button>
+          <button id="btn-imagen-nueva" class="btn-secundario">× Nueva imagen</button>
+        </div>
+        <div id="imagen-resultado"></div>
+      </div>
+      
+     <!-- VISTA: ASISTENTE IA -->
+      <div id="vista-asistente" class="vista oculto">
+        <div class="seccion-titulo">
+          <h2>Asistente financiero</h2>
+          <button id="btn-limpiar-chat" class="btn-secundario">↺ Limpiar chat</button>
+        </div>
+        <div id="chat-mensajes" class="chat-mensajes"></div>
+        <div class="chat-input-area">
+          <textarea id="chat-input" class="chat-input" placeholder="Pregunta sobre tus finanzas... Ej: ¿Cuánto gasté en comida este mes? ¿Conviene cerrar la cuenta AV Villas?" rows="2"></textarea>
+          <button id="btn-chat-enviar" class="btn-primario">Enviar</button>
+        </div>
+        <div class="chat-sugerencias">
+          <button class="sugerencia-btn" onclick="enviarSugerencia('¿Cuál es mi patrimonio neto actual?')">Patrimonio neto</button>
+          <button class="sugerencia-btn" onclick="enviarSugerencia('¿Cuánto he gastado este mes por categoría?')">Gastos del mes</button>
+          <button class="sugerencia-btn" onclick="enviarSugerencia('¿Conviene cerrar la cuenta AV Villas?')">Cerrar AV Villas</button>
+          <button class="sugerencia-btn" onclick="enviarSugerencia('¿Dónde me conviene tener mis excedentes de liquidez?')">Optimizar excedentes</button>
+          <button class="sugerencia-btn" onclick="enviarSugerencia('¿Conviene mover la nómina de BBVA a Bancolombia?')">Nómina BBVA vs Bancolombia</button>
+        </div>
+      </div> 
+
+      <!-- VISTA: PROYECCIÓN -->
+      <div id="vista-proyeccion" class="vista oculto">
+        <div class="seccion-titulo">
+          <h2>Proyección 12 meses</h2>
+          <button id="btn-generar-proyeccion" class="btn-primario">▶ Generar proyección</button>
+        </div>
+        <div class="proyeccion-escenarios">
+          <button class="escenario-btn activo" data-escenario="base">Base</button>
+          <button class="escenario-btn" data-escenario="optimista">Optimista</button>
+          <button class="escenario-btn" data-escenario="pesimista">Pesimista</button>
+        </div>
+        <div id="proyeccion-resultado"></div>
+      </div>
+
+      <!-- VISTA: REAL VS PRESUPUESTO -->
+      <div id="vista-presupuesto" class="vista oculto">
+        <div class="seccion-titulo">
+          <h2>Real vs Presupuesto</h2>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="ppto-mes" class="campo-select-inline"></select>
+            <button id="btn-cargar-ppto" class="btn-primario">Ver</button>
+          </div>
+        </div>
+        <div id="ppto-aviso" style="display:none;background:rgba(79,142,247,0.1);border:1px solid var(--acento);border-radius:var(--radio);padding:14px;margin-bottom:20px;font-size:13px">
+          <strong>Sin presupuesto cargado para este mes.</strong><br>
+          Puedes ingresar los valores presupuestados directamente en la hoja <em>Presupuesto</em> del Google Sheet con el formato: Fecha | Tipo | Grupo | Subgrupo | Monto | Comentario
+        </div>
+        <div id="ppto-resultado"></div>
+      </div>
+
+    </main>
+  </div>
+
+  <div id="toast" class="toast oculto"></div>
+  <div id="spinner" class="spinner oculto">Cargando...</div>
+
+  <script src="app.js"></script>
+</body>
+</html>
