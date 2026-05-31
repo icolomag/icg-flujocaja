@@ -718,6 +718,7 @@ function cambiarVista(vista) {
   if (vista === 'proyeccion') inicializarProyeccion();
   if (vista === 'presupuesto') inicializarPresupuesto();
   if (vista === 'nomina') inicializarNomina();
+  if (vista === 'cierre') inicializarCierre();
 }
 
 // ── FASE 4: INGESTA POR IMAGEN ────────────────────────────────────────
@@ -1781,6 +1782,161 @@ function resetNomina() {
   document.getElementById('btn-nom-cancelar').classList.add('oculto');
   document.getElementById('nom-neto').textContent = '$0';
   document.querySelectorAll('.nomina-linea-nueva').forEach(l => l.remove());
+}
+
+// ── FORMULARIO DE CIERRE DE MES ───────────────────────────────────────
+let cierreCalculado = null;
+
+function inicializarCierre() {
+  // Poblar selector de mes
+  const sel = document.getElementById('cierre-mes');
+  if (sel.options.length === 0) {
+    const hoy = new Date();
+    for (let i = 0; i < 12; i++) {
+      const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+      const valor = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+      const label = fecha.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+      const opt = document.createElement('option');
+      opt.value = valor; opt.textContent = label;
+      sel.appendChild(opt);
+    }
+  }
+
+  // Productos de deuda (créditos e hipoteca, NO tarjetas)
+  const deuda = estado.productos.filter(p =>
+    (p.tipo === 'Crédito' || p.tipo === 'Crédito Hipotecario') && p.estado === 'Activa'
+  );
+  document.getElementById('cierre-deuda').innerHTML = deuda.map(p => `
+    <div class="cierre-linea" data-id="${p.id}">
+      <span class="cierre-nombre">${p.nombre}</span>
+      <span class="cierre-saldo-actual">Actual: ${fmt(Math.abs(p.saldoActual))}</span>
+      <input type="number" class="cierre-input-deuda" placeholder="Nuevo saldo capital" />
+    </div>
+  `).join('');
+
+  // Productos de inversión
+  const inversion = estado.productos.filter(p =>
+    p.tipo === 'Cuenta Inversión' || p.tipo === 'Inversión LP' || p.tipo === 'Inversión Internacional'
+  );
+  document.getElementById('cierre-inversion').innerHTML = inversion.map(p => `
+    <div class="cierre-linea" data-id="${p.id}">
+      <span class="cierre-nombre">${p.nombre}</span>
+      <span class="cierre-saldo-actual">Actual: ${fmt(p.saldoActual)}</span>
+      <input type="number" class="cierre-input-inv" placeholder="Saldo actual real" />
+    </div>
+  `).join('');
+
+  // Listeners
+  ['btn-cierre-calcular','btn-cierre-guardar','btn-cierre-cancelar'].forEach(id => {
+    const b = document.getElementById(id);
+    b.replaceWith(b.cloneNode(true));
+  });
+  document.getElementById('btn-cierre-calcular').addEventListener('click', calcularCierre);
+  document.getElementById('btn-cierre-cancelar').addEventListener('click', resetCierre);
+  document.getElementById('btn-cierre-guardar').addEventListener('click', guardarCierre);
+}
+
+function calcularCierre() {
+  const mes = document.getElementById('cierre-mes').value;
+  const actualizaciones = [];
+  let html = '';
+
+  // Deuda: actualización directa de saldo
+  document.querySelectorAll('#cierre-deuda .cierre-linea').forEach(linea => {
+    const id = linea.dataset.id;
+    const inp = linea.querySelector('.cierre-input-deuda');
+    const nuevoSaldo = parseFloat(inp.value);
+    if (isNaN(nuevoSaldo)) return;
+    const prod = estado.productos.find(p => p.id === id);
+    // Deuda se guarda como negativo
+    const saldoFinal = -Math.abs(nuevoSaldo);
+    const amortizado = Math.abs(prod.saldoActual) - Math.abs(saldoFinal);
+    actualizaciones.push({ id, nombre: prod.nombre, tipo: 'deuda', saldoFinal });
+    html += `<div>💳 <strong>${prod.nombre}</strong>: nuevo saldo ${fmt(saldoFinal)} — amortizado este mes: <span class="rend-positivo">${fmt(amortizado)}</span></div>`;
+  });
+
+  // Inversión: calcular rendimiento
+  document.querySelectorAll('#cierre-inversion .cierre-linea').forEach(linea => {
+    const id = linea.dataset.id;
+    const inp = linea.querySelector('.cierre-input-inv');
+    const saldoFinal = parseFloat(inp.value);
+    if (isNaN(saldoFinal)) return;
+    const prod = estado.productos.find(p => p.id === id);
+    const saldoInicial = prod.saldoActual;
+
+    // Sumar traslados del mes hacia/desde este producto
+    let entradas = 0, salidas = 0;
+    estado.transacciones.forEach(t => {
+      if (!t.fecha || !t.fecha.startsWith(mes)) return;
+      if (t.tipo === 'Traslado') {
+        if (t.destino === id) entradas += t.monto;
+        if (t.origen === id) salidas += t.monto;
+      }
+    });
+
+    const rendimiento = saldoFinal - saldoInicial - entradas + salidas;
+    actualizaciones.push({ id, nombre: prod.nombre, tipo: 'inversion', saldoFinal, rendimiento, entradas, salidas });
+
+    const clsRend = rendimiento >= 0 ? 'rend-positivo' : 'rend-negativo';
+    html += `<div>📈 <strong>${prod.nombre}</strong>: saldo ${fmt(saldoFinal)} · entradas ${fmt(entradas)} · salidas ${fmt(salidas)} → rendimiento: <span class="${clsRend}">${fmt(rendimiento)}</span></div>`;
+  });
+
+  if (!actualizaciones.length) {
+    mostrarToast('Ingresa al menos un saldo');
+    return;
+  }
+
+  cierreCalculado = { mes, actualizaciones };
+  document.getElementById('cierre-resultado').innerHTML =
+    `<div class="cierre-rendimiento"><strong>Resumen del cierre:</strong><br>${html}</div>`;
+  document.getElementById('btn-cierre-guardar').classList.remove('oculto');
+  document.getElementById('btn-cierre-cancelar').classList.remove('oculto');
+}
+
+async function guardarCierre() {
+  if (!cierreCalculado) return;
+  mostrarSpinner(true);
+  try {
+    const { mes, actualizaciones } = cierreCalculado;
+    const fechaCierre = `${mes}-28`;
+
+    for (const a of actualizaciones) {
+      // Actualizar saldo del producto
+      const filas = await leerHoja('Productos!A2:G');
+      for (let i = 0; i < filas.length; i++) {
+        if (filas[i][0] === a.id) {
+          await actualizarCelda(`Productos!G${i + 2}`, a.saldoFinal);
+          break;
+        }
+      }
+      // Para inversión, registrar el rendimiento como ingreso
+      if (a.tipo === 'inversion' && Math.abs(a.rendimiento) > 0) {
+        await escribirFila('Transacciones', [
+          'TX' + Date.now() + Math.floor(Math.random()*100),
+          fechaCierre, 'Ingreso', 'Ingresos', 'Rendimientos financieros',
+          a.id, '', a.rendimiento, `Rendimiento ${a.nombre} - cierre ${mes}`, 'Cierre', 'TRUE', ''
+        ]);
+      }
+    }
+
+    await cargarDatos();
+    mostrarSpinner(false);
+    mostrarToast('✓ Cierre de mes registrado');
+    resetCierre();
+    cambiarVista('dashboard');
+  } catch(e) {
+    mostrarSpinner(false);
+    mostrarToast('Error en cierre: ' + e.message);
+    console.error(e);
+  }
+}
+
+function resetCierre() {
+  cierreCalculado = null;
+  document.getElementById('cierre-resultado').innerHTML = '';
+  document.getElementById('btn-cierre-guardar').classList.add('oculto');
+  document.getElementById('btn-cierre-cancelar').classList.add('oculto');
+  document.querySelectorAll('#vista-cierre input').forEach(i => i.value = '');
 }
 
 // ── UTILIDADES ────────────────────────────────────────────────────────
