@@ -1101,7 +1101,7 @@ INSTRUCCIONES:
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
+        model: document.getElementById('selector-modelo')?.value || 'claude-sonnet-4-5',
         max_tokens: 1500,
         system: systemPrompt + '\n\nCONTEXTO FINANCIERO ACTUAL:\n' + contexto,
         messages: historialReciente
