@@ -262,7 +262,13 @@
       <div id="vista-asistente" class="vista oculto">
         <div class="seccion-titulo">
           <h2>Asistente financiero</h2>
-          <button id="btn-limpiar-chat" class="btn-secundario">↺ Limpiar chat</button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="selector-modelo" class="campo-select-inline" title="Modelo de IA">
+              <option value="claude-sonnet-4-5">Sonnet (uso diario)</option>
+              <option value="claude-opus-4-1">Opus (análisis profundo)</option>
+            </select>
+            <button id="btn-limpiar-chat" class="btn-secundario">↺ Limpiar chat</button>
+        </div>
         </div>
         <div id="chat-mensajes" class="chat-mensajes"></div>
         <div class="chat-input-area">
