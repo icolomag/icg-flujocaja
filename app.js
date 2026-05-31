@@ -407,6 +407,7 @@ async function cargarDatos() {
     renderDashboard();
     poblarSelectores();
     renderHistorial();
+    revisarVencimientos();
   } catch(e) {
     mostrarToast('Error cargando datos: ' + e.message);
   }
@@ -1561,6 +1562,75 @@ function renderPct(real, ppto, tipo) {
     <div class="barra-desviacion">
       <div class="barra-fill ${cls}" style="width:${Math.min(pct, 150)}%"></div>
     </div>
+  </div>`;
+}
+
+// ── ALERTADOR DE VENCIMIENTOS ─────────────────────────────────────────
+async function revisarVencimientos() {
+  try {
+    const filas = await leerHoja('Pagos_Recurrentes!A2:J');
+    const hoy = new Date();
+    const diaHoy = hoy.getDate();
+    const alertas = [];
+
+    filas.forEach(f => {
+      const nombre = f[0];
+      const monto = parseFloat(f[4]) || 0;
+      const frecuencia = f[5] || '';
+      const diaPago = parseInt(f[6]) || 0;
+      const activo = (f[8] || '').toString().toUpperCase() === 'TRUE';
+
+      if (!activo || !diaPago) return;
+      if (frecuencia !== 'Mensual') return; // por ahora solo mensuales con día fijo
+
+      // Calcular días hasta el vencimiento
+      let diasFaltantes = diaPago - diaHoy;
+      if (diasFaltantes < 0) {
+        // Ya pasó este mes, calcular para el próximo mes
+        const diasEnMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+        diasFaltantes = (diasEnMes - diaHoy) + diaPago;
+      }
+
+      if (diasFaltantes >= 0 && diasFaltantes <= 5) {
+        alertas.push({ nombre, monto, diaPago, diasFaltantes });
+      }
+    });
+
+    renderAlertasVencimiento(alertas);
+  } catch(e) {
+    console.error('Error revisando vencimientos:', e);
+  }
+}
+
+function renderAlertasVencimiento(alertas) {
+  let cont = document.getElementById('alertas-vencimiento');
+  if (!cont) {
+    cont = document.createElement('div');
+    cont.id = 'alertas-vencimiento';
+    const dashboard = document.getElementById('vista-dashboard');
+    dashboard.insertBefore(cont, dashboard.firstChild);
+  }
+
+  if (!alertas.length) {
+    cont.innerHTML = '';
+    return;
+  }
+
+  alertas.sort((a, b) => a.diasFaltantes - b.diasFaltantes);
+
+  cont.innerHTML = `<div class="alertas-box">
+    <div class="alertas-titulo">🔔 Pagos próximos (5 días)</div>
+    ${alertas.map(a => {
+      const urgente = a.diasFaltantes <= 2;
+      const cuando = a.diasFaltantes === 0 ? 'Hoy' :
+                     a.diasFaltantes === 1 ? 'Mañana' :
+                     `En ${a.diasFaltantes} días`;
+      return `<div class="alerta-item ${urgente ? 'urgente' : ''}">
+        <span class="alerta-nombre">${a.nombre}</span>
+        <span class="alerta-cuando">${cuando} (día ${a.diaPago})</span>
+        <span class="alerta-monto">${a.monto > 0 ? fmt(a.monto) : ''}</span>
+      </div>`;
+    }).join('')}
   </div>`;
 }
 
