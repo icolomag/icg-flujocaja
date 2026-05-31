@@ -1661,12 +1661,10 @@ function inicializarNomina() {
 
   // Poblar cuenta destino (cuentas de ahorro)
   const sel = document.getElementById('nom-cuenta');
-  if (sel.options.length === 0) {
-    const cuentas = estado.productos.filter(p => p.tipo === 'Cuenta Ahorros');
-    sel.innerHTML = cuentas.map(p =>
-      `<option value="${p.id}" ${p.entidad === 'BBVA' ? 'selected' : ''}>${p.nombre}</option>`
-    ).join('');
-  }
+  const cuentas = estado.productos.filter(p => p.tipo === 'Cuenta Ahorros');
+  sel.innerHTML = cuentas.map(p =>
+    `<option value="${p.id}" ${p.entidad === 'BBVA' ? 'selected' : ''}>${p.nombre}</option>`
+  ).join('');
 
   // Listeners (evitar duplicados con clonado)
   ['btn-nom-calcular','btn-nom-guardar','btn-nom-cancelar','btn-nom-agregar'].forEach(id => {
