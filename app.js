@@ -1577,7 +1577,10 @@ async function revisarVencimientos() {
       const nombre = f[0];
       const monto = parseFloat(f[4]) || 0;
       const frecuencia = f[5] || '';
-      const diaPago = parseInt(f[6]) || 0;
+      let diaPago = parseInt(f[6]) || 0;
+      if (!diaPago && (f[6] || '').toLowerCase().includes('último')) {
+        diaPago = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+      }
       const activo = (f[8] || '').toString().toUpperCase() === 'TRUE';
 
       if (!activo || !diaPago) return;
