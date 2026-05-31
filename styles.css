@@ -553,5 +553,36 @@ tr:hover td { background: var(--bg2); }
 }
 .apikey-input:focus { outline: none; border-color: var(--acento); }
 
+/* ALERTAS VENCIMIENTO */
+.alertas-box {
+  background: var(--bg2);
+  border: 1px solid var(--amarillo);
+  border-radius: var(--radio);
+  padding: 16px;
+  margin-bottom: 24px;
+}
+.alertas-titulo {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--amarillo);
+  margin-bottom: 12px;
+}
+.alerta-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radio);
+  margin-bottom: 6px;
+  background: var(--bg3);
+  font-size: 13px;
+}
+.alerta-item.urgente {
+  border-left: 3px solid var(--rojo);
+}
+.alerta-nombre { flex: 1; font-weight: 600; }
+.alerta-cuando { color: var(--texto2); font-size: 12px; }
+.alerta-monto { font-weight: 700; color: var(--texto); }
+
 Cuando hayas aplicado los tres cambios (app.js completo, nav + vista en index.html, estilos en styles.css), recarga la app en el navegador, vuelve a hacer login y ve a la pestaña Gmail.
 Confírmame qué ves.
