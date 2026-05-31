@@ -717,6 +717,7 @@ function cambiarVista(vista) {
   if (vista === 'asistente') inicializarAsistente();
   if (vista === 'proyeccion') inicializarProyeccion();
   if (vista === 'presupuesto') inicializarPresupuesto();
+  if (vista === 'nomina') inicializarNomina();
 }
 
 // ── FASE 4: INGESTA POR IMAGEN ────────────────────────────────────────
@@ -1651,6 +1652,137 @@ function renderAlertasVencimiento(alertas) {
       </div>`;
     }).join('')}
   </div>`;
+}
+
+// ── FORMULARIO DE NÓMINA ──────────────────────────────────────────────
+function inicializarNomina() {
+  // Fecha de hoy
+  document.getElementById('nom-fecha').value = new Date().toISOString().split('T')[0];
+
+  // Poblar cuenta destino (cuentas de ahorro)
+  const sel = document.getElementById('nom-cuenta');
+  if (sel.options.length === 0) {
+    const cuentas = estado.productos.filter(p => p.tipo === 'Cuenta Ahorros');
+    sel.innerHTML = cuentas.map(p =>
+      `<option value="${p.id}" ${p.entidad === 'BBVA' ? 'selected' : ''}>${p.nombre}</option>`
+    ).join('');
+  }
+
+  // Listeners (evitar duplicados con clonado)
+  ['btn-nom-calcular','btn-nom-guardar','btn-nom-cancelar','btn-nom-agregar'].forEach(id => {
+    const b = document.getElementById(id);
+    b.replaceWith(b.cloneNode(true));
+  });
+
+  document.getElementById('btn-nom-calcular').addEventListener('click', calcularNeto);
+  document.getElementById('btn-nom-cancelar').addEventListener('click', resetNomina);
+  document.getElementById('btn-nom-agregar').addEventListener('click', agregarLineaDescuento);
+  document.getElementById('btn-nom-guardar').addEventListener('click', guardarNomina);
+}
+
+function agregarLineaDescuento() {
+  const cont = document.getElementById('nom-descuentos');
+  const div = document.createElement('div');
+  div.className = 'nomina-linea nomina-linea-nueva';
+  div.innerHTML = `
+    <input type="text" class="rubro-nuevo" placeholder="Concepto (ej: Compra interna)" />
+    <input type="number" class="nom-desc-extra" value="0" />
+    <button class="btn-quitar-linea" onclick="this.parentElement.remove()">×</button>
+  `;
+  cont.appendChild(div);
+}
+
+function calcularNeto() {
+  const bruto = parseFloat(document.getElementById('nom-bruto').value) || 0;
+  let totalDesc = 0;
+  document.querySelectorAll('#nom-descuentos .nomina-linea').forEach(linea => {
+    const inp = linea.querySelector('input[type="number"]');
+    totalDesc += parseFloat(inp.value) || 0;
+  });
+  const neto = bruto - totalDesc;
+  document.getElementById('nom-neto').textContent = fmt(neto);
+
+  document.getElementById('btn-nom-guardar').classList.remove('oculto');
+  document.getElementById('btn-nom-cancelar').classList.remove('oculto');
+}
+
+async function guardarNomina() {
+  const fecha = document.getElementById('nom-fecha').value;
+  const cuentaDestino = document.getElementById('nom-cuenta').value;
+  const bruto = parseFloat(document.getElementById('nom-bruto').value) || 0;
+
+  if (!fecha || !cuentaDestino || bruto <= 0) {
+    mostrarToast('Completa fecha, cuenta y salario bruto');
+    return;
+  }
+
+  // Recolectar descuentos
+  const descuentos = [];
+  document.querySelectorAll('#nom-descuentos .nomina-linea').forEach(linea => {
+    const inp = linea.querySelector('input[type="number"]');
+    const valor = parseFloat(inp.value) || 0;
+    if (valor <= 0) return;
+
+    if (linea.dataset.grupo) {
+      // Descuento fijo predefinido
+      descuentos.push({ grupo: linea.dataset.grupo, sub: linea.dataset.sub, valor });
+    } else {
+      // Descuento nuevo agregado
+      const rubro = linea.querySelector('.rubro-nuevo')?.value || 'Otros egresos';
+      descuentos.push({ grupo: 'Otros egresos', sub: rubro, valor });
+    }
+  });
+
+  const totalDesc = descuentos.reduce((s, d) => s + d.valor, 0);
+  const neto = bruto - totalDesc;
+
+  mostrarSpinner(true);
+  try {
+    const baseId = Date.now();
+
+    // 1. Registrar ingreso bruto (entra a la cuenta)
+    await escribirFila('Transacciones', [
+      'TX' + baseId, fecha, 'Ingreso', 'Ingresos', 'ARUS salario neto',
+      cuentaDestino, '', bruto, 'Salario bruto quincena', 'Nómina', 'TRUE', ''
+    ]);
+
+    // 2. Registrar cada descuento como egreso de la cuenta
+    let i = 1;
+    for (const d of descuentos) {
+      await escribirFila('Transacciones', [
+        'TX' + (baseId + i), fecha, 'Egreso', d.grupo, d.sub,
+        cuentaDestino, '', d.valor, 'Descuento nómina', 'Nómina', 'TRUE', ''
+      ]);
+      i++;
+    }
+
+    // 3. Actualizar saldo de la cuenta: +bruto -descuentos = +neto
+    await actualizarSaldoProducto(cuentaDestino, 'Ingreso', neto);
+
+    // 4. Si hay aporte a FondoSura, actualizar su saldo (la plata va a inversión)
+    const aporteFondo = descuentos.find(d => d.sub && d.sub.includes('FondoSura'));
+    if (aporteFondo) {
+      const fondo = estado.productos.find(p => p.nombre.includes('FondoSura'));
+      if (fondo) await actualizarSaldoProducto(fondo.id, 'Ingreso', aporteFondo.valor);
+    }
+
+    await cargarDatos();
+    mostrarSpinner(false);
+    mostrarToast('✓ Nómina registrada — neto: ' + fmt(neto));
+    resetNomina();
+    cambiarVista('dashboard');
+  } catch(e) {
+    mostrarSpinner(false);
+    mostrarToast('Error registrando nómina: ' + e.message);
+    console.error(e);
+  }
+}
+
+function resetNomina() {
+  document.getElementById('btn-nom-guardar').classList.add('oculto');
+  document.getElementById('btn-nom-cancelar').classList.add('oculto');
+  document.getElementById('nom-neto').textContent = '$0';
+  document.querySelectorAll('.nomina-linea-nueva').forEach(l => l.remove());
 }
 
 // ── UTILIDADES ────────────────────────────────────────────────────────
