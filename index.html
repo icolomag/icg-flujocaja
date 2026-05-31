@@ -48,6 +48,7 @@
       <button class="nav-btn activo" data-vista="dashboard">Dashboard</button>
       <button class="nav-btn" data-vista="transaccion">+ Transacción</button>
       <button class="nav-btn" data-vista="traslado">⇄ Traslado</button>
+      <button class="nav-btn" data-vista="nomina">💵 Nómina</button>
       <button class="nav-btn" data-vista="historial">Historial</button>
       <button class="nav-btn" data-vista="gmail">📧 Gmail</button>
       <button class="nav-btn" data-vista="imagen">📷 Imagen</button>
@@ -312,6 +313,70 @@
           Puedes ingresar los valores presupuestados directamente en la hoja <em>Presupuesto</em> del Google Sheet con el formato: Fecha | Tipo | Grupo | Subgrupo | Monto | Comentario
         </div>
         <div id="ppto-resultado"></div>
+      </div>
+
+      <!-- VISTA: NÓMINA -->
+      <div id="vista-nomina" class="vista oculto">
+        <h2>Registro de nómina (quincena)</h2>
+        <p style="color:var(--texto2);font-size:13px;margin-bottom:20px">
+          Registra tu quincena. Los descuentos van a su rubro y el neto entra a tu cuenta BBVA. Los valores son editables.
+        </p>
+        <div class="formulario">
+          <div class="campo">
+            <label>Fecha de pago</label>
+            <input type="date" id="nom-fecha" />
+          </div>
+          <div class="campo">
+            <label>Cuenta destino del neto</label>
+            <select id="nom-cuenta"></select>
+          </div>
+
+          <div class="nomina-seccion">
+            <div class="nomina-seccion-titulo">💰 Ingreso</div>
+            <div class="nomina-linea">
+              <span>Salario bruto</span>
+              <input type="number" id="nom-bruto" value="4827550" />
+            </div>
+          </div>
+
+          <div class="nomina-seccion">
+            <div class="nomina-seccion-titulo">📉 Descuentos</div>
+            <div id="nom-descuentos">
+              <div class="nomina-linea" data-grupo="Impuestos" data-sub="Renta (cuotas mensuales)">
+                <span>Renta</span>
+                <input type="number" class="nom-desc" value="80000" />
+              </div>
+              <div class="nomina-linea" data-grupo="Seguros" data-sub="Póliza salud SURA">
+                <span>Póliza SURA</span>
+                <input type="number" class="nom-desc" value="496213" />
+              </div>
+              <div class="nomina-linea" data-grupo="Créditos personales" data-sub="Crédito BBVA Libranza (cuota)">
+                <span>Cuota libranza BBVA</span>
+                <input type="number" class="nom-desc" value="71859" />
+              </div>
+              <div class="nomina-linea" data-grupo="Gastos carro" data-sub="Parqueaderos">
+                <span>Parqueadero</span>
+                <input type="number" class="nom-desc" value="124700" />
+              </div>
+              <div class="nomina-linea" data-grupo="Inversiones LP" data-sub="FondoSura (aporte quincenal)">
+                <span>Aporte FondoSura</span>
+                <input type="number" class="nom-desc" value="105000" />
+              </div>
+            </div>
+            <button id="btn-nom-agregar" class="btn-secundario" style="margin-top:8px">+ Agregar descuento</button>
+          </div>
+
+          <div class="nomina-neto">
+            <span>Neto a recibir en cuenta</span>
+            <strong id="nom-neto">$0</strong>
+          </div>
+
+          <div class="campo-accion">
+            <button id="btn-nom-calcular" class="btn-primario">Calcular neto</button>
+            <button id="btn-nom-guardar" class="btn-confirmar oculto">✓ Confirmar y registrar</button>
+            <button id="btn-nom-cancelar" class="btn-secundario oculto">Cancelar</button>
+          </div>
+        </div>
       </div>
 
     </main>
