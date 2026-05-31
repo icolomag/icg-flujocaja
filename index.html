@@ -55,6 +55,7 @@
       <button class="nav-btn" data-vista="asistente">🤖 Asistente</button>
       <button class="nav-btn" data-vista="proyeccion">📈 Proyección</button>
       <button class="nav-btn" data-vista="presupuesto">📊 vs Presupuesto</button>
+      <button class="nav-btn" data-vista="cierre">🔄 Cierre mes</button>
     </nav>
 
     <!-- CONTENIDO -->
@@ -377,6 +378,35 @@
             <button id="btn-nom-cancelar" class="btn-secundario oculto">Cancelar</button>
           </div>
         </div>
+      </div>
+
+      <!-- VISTA: CIERRE DE MES -->
+      <div id="vista-cierre" class="vista oculto">
+        <h2>Cierre de mes — actualización de saldos</h2>
+        <p style="color:var(--texto2);font-size:13px;margin-bottom:20px">
+          Ingresa el saldo actual de cada producto. Para inversiones, el sistema calcula el rendimiento descontando los traslados del mes ya registrados.
+        </p>
+        <div class="campo" style="max-width:260px;margin-bottom:20px">
+          <label>Mes que estás cerrando</label>
+          <select id="cierre-mes" class="campo-select-inline"></select>
+        </div>
+
+        <div class="cierre-seccion">
+          <h3>💳 Deuda (saldo de capital pendiente)</h3>
+          <div id="cierre-deuda"></div>
+        </div>
+
+        <div class="cierre-seccion">
+          <h3>📈 Inversión / Ahorro (saldo actual)</h3>
+          <div id="cierre-inversion"></div>
+        </div>
+
+        <div class="campo-accion">
+          <button id="btn-cierre-calcular" class="btn-primario">Calcular rendimientos</button>
+          <button id="btn-cierre-guardar" class="btn-confirmar oculto">✓ Confirmar y actualizar</button>
+          <button id="btn-cierre-cancelar" class="btn-secundario oculto">Cancelar</button>
+        </div>
+        <div id="cierre-resultado"></div>
       </div>
 
     </main>
