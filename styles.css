@@ -584,5 +584,51 @@ tr:hover td { background: var(--bg2); }
 .alerta-cuando { color: var(--texto2); font-size: 12px; }
 .alerta-monto { font-weight: 700; color: var(--texto); }
 
+/* NÓMINA */
+.nomina-seccion { margin: 16px 0; }
+.nomina-seccion-titulo { font-size: 13px; color: var(--texto2); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.nomina-linea {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--bg2);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 8px 14px;
+  margin-bottom: 8px;
+}
+.nomina-linea span { font-size: 14px; flex: 1; }
+.nomina-linea input {
+  background: var(--bg3);
+  border: 1px solid var(--borde);
+  color: var(--texto);
+  padding: 6px 10px;
+  border-radius: var(--radio);
+  font-size: 14px;
+  width: 140px;
+  text-align: right;
+}
+.nomina-linea-nueva input.rubro-nuevo { width: auto; flex: 1; text-align: left; }
+.nomina-neto {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg3);
+  border: 1px solid var(--acento);
+  border-radius: var(--radio);
+  padding: 14px 18px;
+  margin-top: 16px;
+}
+.nomina-neto strong { font-size: 22px; color: var(--verde); }
+.btn-quitar-linea {
+  background: none;
+  border: none;
+  color: var(--rojo);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0 4px;
+}
+
 Cuando hayas aplicado los tres cambios (app.js completo, nav + vista en index.html, estilos en styles.css), recarga la app en el navegador, vuelve a hacer login y ve a la pestaña Gmail.
 Confírmame qué ves.
