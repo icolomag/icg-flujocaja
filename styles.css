@@ -630,5 +630,42 @@ tr:hover td { background: var(--bg2); }
   padding: 0 4px;
 }
 
+/* CIERRE DE MES */
+.cierre-seccion { margin-bottom: 24px; }
+.cierre-seccion h3 { font-size: 14px; color: var(--texto2); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+.cierre-linea {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg2);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 10px 14px;
+  margin-bottom: 8px;
+}
+.cierre-linea .cierre-nombre { flex: 1; font-size: 14px; }
+.cierre-linea .cierre-saldo-actual { font-size: 12px; color: var(--texto2); width: 130px; text-align: right; }
+.cierre-linea input {
+  background: var(--bg3);
+  border: 1px solid var(--borde);
+  color: var(--texto);
+  padding: 8px 12px;
+  border-radius: var(--radio);
+  font-size: 14px;
+  width: 150px;
+  text-align: right;
+}
+.cierre-rendimiento {
+  background: var(--bg3);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 14px;
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.cierre-rendimiento .rend-positivo { color: var(--verde); font-weight: 700; }
+.cierre-rendimiento .rend-negativo { color: var(--rojo); font-weight: 700; }
+
 Cuando hayas aplicado los tres cambios (app.js completo, nav + vista en index.html, estilos en styles.css), recarga la app en el navegador, vuelve a hacer login y ve a la pestaña Gmail.
 Confírmame qué ves.
