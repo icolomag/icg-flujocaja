@@ -730,6 +730,7 @@ function cambiarVista(vista) {
   if (vista === 'presupuesto') inicializarPresupuesto();
   if (vista === 'nomina') inicializarNomina();
   if (vista === 'cierre') inicializarCierre();
+  if (vista === 'notas') inicializarNotas();
 }
 
 // ── FASE 4: INGESTA POR IMAGEN ────────────────────────────────────────
@@ -1973,6 +1974,78 @@ function resetCierre() {
   document.getElementById('btn-cierre-guardar').classList.add('oculto');
   document.getElementById('btn-cierre-cancelar').classList.add('oculto');
   document.querySelectorAll('#vista-cierre input').forEach(i => i.value = '');
+}
+
+// ── NOTAS / CONTEXTO ──────────────────────────────────────────────────
+function inicializarNotas() {
+  const b = document.getElementById('btn-nota-agregar');
+  b.replaceWith(b.cloneNode(true));
+  document.getElementById('btn-nota-agregar').addEventListener('click', agregarNota);
+  renderNotas();
+}
+
+function renderNotas() {
+  const el = document.getElementById('notas-lista');
+  if (!estado.contexto || !estado.contexto.length) {
+    el.innerHTML = '<p style="color:var(--texto2);font-size:14px">Sin consideraciones registradas aún.</p>';
+    return;
+  }
+  el.innerHTML = estado.contexto.map((c, i) => `
+    <div class="nota-card">
+      <span class="nota-cat">${c.categoria}</span>
+      <span class="nota-texto-cont">${c.consideracion}</span>
+      <button class="nota-borrar" onclick="borrarNota(${i})" title="Eliminar">🗑</button>
+    </div>
+  `).join('');
+}
+
+async function agregarNota() {
+  const categoria = document.getElementById('nota-categoria').value;
+  const texto = document.getElementById('nota-texto').value.trim();
+  if (!texto) { mostrarToast('Escribe la consideración'); return; }
+
+  mostrarSpinner(true);
+  try {
+    await escribirFila('Contexto', [categoria, texto, 'TRUE']);
+    await cargarDatos();
+    document.getElementById('nota-texto').value = '';
+    renderNotas();
+    mostrarToast('✓ Nota agregada');
+  } catch(e) {
+    mostrarToast('Error agregando nota: ' + e.message);
+  }
+  mostrarSpinner(false);
+}
+
+async function borrarNota(indice) {
+  if (!confirm('¿Eliminar esta consideración?')) return;
+  mostrarSpinner(true);
+  try {
+    // Leer todas las filas actuales de Contexto
+    const filas = await leerHoja('Contexto!A2:C');
+    // Reconstruir sin la fila del índice indicado (solo activas se muestran, así que mapeamos por contenido)
+    const nota = estado.contexto[indice];
+    // Encontrar la fila real que coincide con categoría + consideración
+    let filaReal = -1;
+    for (let i = 0; i < filas.length; i++) {
+      if (filas[i][0] === nota.categoria && filas[i][1] === nota.consideracion &&
+          (filas[i][2] || '').toString().toUpperCase() !== 'FALSE') {
+        filaReal = i;
+        break;
+      }
+    }
+    if (filaReal === -1) { mostrarToast('No se encontró la nota'); mostrarSpinner(false); return; }
+
+    // Marcar como FALSE (desactivar) en lugar de borrar físicamente — más seguro
+    await actualizarCelda(`Contexto!C${filaReal + 2}`, 'FALSE');
+    await cargarDatos();
+    renderNotas();
+    mostrarSpinner(false);
+    mostrarToast('✓ Nota eliminada');
+  } catch(e) {
+    mostrarSpinner(false);
+    mostrarToast('Error eliminando nota: ' + e.message);
+  }
 }
 
 // ── UTILIDADES ────────────────────────────────────────────────────────
