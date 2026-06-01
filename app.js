@@ -1034,6 +1034,23 @@ function construirContextoFinanciero() {
   const ingresosMes = txsMes.filter(t => t.tipo === 'Ingreso').reduce((s, t) => s + t.monto, 0);
   const egresosMes = txsMes.filter(t => t.tipo === 'Egreso').reduce((s, t) => s + t.monto, 0);
 
+  // Presupuesto próximos 12 meses (resumen por mes y categoría)
+  let resumenPpto = '';
+  if (estado.presupuesto && estado.presupuesto.length) {
+    const porMes = {};
+    estado.presupuesto.forEach(p => {
+      const mes = (p.fecha || '').substring(0, 7);
+      if (!mes) return;
+      if (!porMes[mes]) porMes[mes] = { ingresos: 0, egresos: 0 };
+      if (p.tipo === 'Ingreso') porMes[mes].ingresos += p.monto;
+      else if (p.tipo === 'Egreso') porMes[mes].egresos += p.monto;
+    });
+    resumenPpto = Object.keys(porMes).sort().map(mes => {
+      const m = porMes[mes];
+      return `${mes}: ingresos ${fmt(m.ingresos)}, egresos ${fmt(m.egresos)}, balance ${fmt(m.ingresos - m.egresos)}`;
+    }).join('\n');
+  }
+
   return `FECHA HOY: ${hoy.toISOString().split('T')[0]}
 
 PATRIMONIO NETO:
@@ -1055,6 +1072,9 @@ ${resumenMes || 'Sin egresos registrados este mes'}
 
 ÚLTIMAS 50 TRANSACCIONES:
 ${txs || 'Sin transacciones registradas'}
+
+PRESUPUESTO PROYECTADO (próximos 12 meses):
+${resumenPpto || 'Sin presupuesto cargado'}
 
 DECISIONES ESTRATÉGICAS PENDIENTES:
 1. Cerrar cuenta AV Villas (tiene costo mensual, hipoteca se paga por PSE)
