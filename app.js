@@ -1090,6 +1090,7 @@ ${resumenPpto || 'Sin presupuesto cargado'}
 
 CONSIDERACIONES Y DECISIONES ACTUALES (mantenidas por Nacho, son verdades vigentes sobre su situación):
 ${notasContexto || 'Sin consideraciones registradas'}`;
+}
 
 async function enviarMensajeChat(textoForzado) {
   const input = document.getElementById('chat-input');
