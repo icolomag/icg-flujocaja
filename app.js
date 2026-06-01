@@ -380,10 +380,11 @@ function descartarCorreo(i) {
 async function cargarDatos() {
   mostrarSpinner(true);
   try {
-    const [filasProductos, filasGrupos, filasTx] = await Promise.all([
+    const [filasProductos, filasGrupos, filasTx, filasPpto] = await Promise.all([
       leerHoja('Productos!A2:N'),
       leerHoja('Grupos!A2:C'),
-      leerHoja('Transacciones!A2:L')
+      leerHoja('Transacciones!A2:L'),
+      leerHoja('Presupuesto!A2:F')
     ]);
 
     estado.productos = filasProductos.map(f => ({
@@ -402,6 +403,11 @@ async function cargarDatos() {
       id: f[0], fecha: f[1], tipo: f[2], grupo: f[3], subgrupo: f[4],
       origen: f[5], destino: f[6], monto: parseFloat(f[7]) || 0,
       descripcion: f[8], fuente: f[9], confirmado: f[10], notas: f[11]
+    }));
+
+    estado.presupuesto = filasPpto.map(f => ({
+      fecha: f[0], tipo: f[1], grupo: f[2], subgrupo: f[3],
+      monto: parseFloat(f[4]) || 0, comentario: f[5] || ''
     }));
 
     renderDashboard();
