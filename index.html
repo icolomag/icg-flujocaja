@@ -53,6 +53,7 @@
       <button class="nav-btn" data-vista="gmail">📧 Gmail</button>
       <button class="nav-btn" data-vista="imagen">📷 Imagen</button>
       <button class="nav-btn" data-vista="asistente">🤖 Asistente</button>
+      <button class="nav-btn" data-vista="notas">📝 Notas</button>
       <button class="nav-btn" data-vista="proyeccion">📈 Proyección</button>
       <button class="nav-btn" data-vista="presupuesto">📊 vs Presupuesto</button>
       <button class="nav-btn" data-vista="cierre">🔄 Cierre mes</button>
@@ -407,6 +408,31 @@
           <button id="btn-cierre-cancelar" class="btn-secundario oculto">Cancelar</button>
         </div>
         <div id="cierre-resultado"></div>
+      </div>
+
+      <!-- VISTA: NOTAS / CONTEXTO -->
+      <div id="vista-notas" class="vista oculto">
+        <div class="seccion-titulo">
+          <h2>Mis consideraciones y decisiones</h2>
+        </div>
+        <p style="color:var(--texto2);font-size:13px;margin-bottom:20px">
+          Estas notas son la memoria del asistente sobre tu situación. Edítalas cuando algo cambie — el asistente las usa en cada análisis.
+        </p>
+
+        <div class="nota-form">
+          <select id="nota-categoria" class="campo-select-inline">
+            <option value="Deudas">Deudas</option>
+            <option value="Familiar">Familiar</option>
+            <option value="Objetivo">Objetivo</option>
+            <option value="Decisión">Decisión</option>
+            <option value="Estrategia">Estrategia</option>
+            <option value="Otro">Otro</option>
+          </select>
+          <input type="text" id="nota-texto" class="nota-input" placeholder="Escribe la consideración..." />
+          <button id="btn-nota-agregar" class="btn-primario">+ Agregar</button>
+        </div>
+
+        <div id="notas-lista"></div>
       </div>
 
     </main>
