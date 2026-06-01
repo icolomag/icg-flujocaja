@@ -1137,10 +1137,9 @@ INSTRUCCIONES DE COMPORTAMIENTO:
 - Montos en formato $#,##0 COP.
 - Señala riesgos concretos, no genéricos. No repitas consejos ya dados en la sesión.
 - Para decisiones grandes, considera siempre el orden de prioridad de objetivos y la situación de déficit actual.
-- Si no tienes contexto suficiente, dilo claramente. Máximo una pregunta de clarificación por turno.`
-      
-GESTIÓN DE CONSIDERACIONES: Nacho mantiene una lista de "consideraciones y decisiones actuales" (mostrada arriba en el contexto), que él edita desde la app. Esa lista es la memoria persistente de su situación. Cuando en la conversación detectes que una consideración quedó obsoleta (por ejemplo, una decisión que ya ejecutó) o que surge un dato permanente nuevo y relevante que debería quedar registrado, sugiérele explícitamente que actualice esa nota: indícale si conviene desactivarla, editarla o agregar una nueva, y con qué texto. No edites tú las notas (no tienes esa capacidad); solo recomiéndale el cambio para que él lo haga desde la pestaña de notas. Hazlo solo cuando sea claramente pertinente, sin ser repetitivo.;
+- Si no tienes contexto suficiente, dilo claramente. Máximo una pregunta de clarificación por turno.
 
+GESTIÓN DE CONSIDERACIONES: Nacho mantiene una lista de "consideraciones y decisiones actuales" (mostrada arriba en el contexto), que él edita desde la app. Esa lista es la memoria persistente de su situación. Cuando en la conversación detectes que una consideración quedó obsoleta (por ejemplo, una decisión que ya ejecutó) o que surge un dato permanente nuevo y relevante que debería quedar registrado, sugiérele explícitamente que actualice esa nota: indícale si conviene desactivarla, editarla o agregar una nueva, y con qué texto. No edites tú las notas (no tienes esa capacidad); solo recomiéndale el cambio para que él lo haga desde la pestaña de notas. Hazlo solo cuando sea claramente pertinente, sin ser repetitivo.`;
     // Agregar mensaje del usuario al historial
     chatHistorial.push({ role: 'user', content: texto });
 
