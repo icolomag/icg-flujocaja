@@ -380,11 +380,12 @@ function descartarCorreo(i) {
 async function cargarDatos() {
   mostrarSpinner(true);
   try {
-    const [filasProductos, filasGrupos, filasTx, filasPpto] = await Promise.all([
+    const [filasProductos, filasGrupos, filasTx, filasPpto, filasContexto] = await Promise.all([
       leerHoja('Productos!A2:N'),
       leerHoja('Grupos!A2:C'),
       leerHoja('Transacciones!A2:L'),
-      leerHoja('Presupuesto!A2:F')
+      leerHoja('Presupuesto!A2:F'),
+      leerHoja('Contexto!A2:C')
     ]);
 
     estado.productos = filasProductos.map(f => ({
@@ -409,6 +410,10 @@ async function cargarDatos() {
       fecha: f[0], tipo: f[1], grupo: f[2], subgrupo: f[3],
       monto: parseFloat(f[4]) || 0, comentario: f[5] || ''
     }));
+
+    estado.contexto = filasContexto
+      .filter(f => f[0] && (f[2] || '').toString().toUpperCase() !== 'FALSE')
+      .map(f => ({ categoria: f[0], consideracion: f[1] || '' }));
 
     renderDashboard();
     poblarSelectores();
@@ -1051,6 +1056,12 @@ function construirContextoFinanciero() {
     }).join('\n');
   }
 
+  // Consideraciones personales (hoja Contexto)
+  let notasContexto = '';
+  if (estado.contexto && estado.contexto.length) {
+    notasContexto = estado.contexto.map(c => `- [${c.categoria}] ${c.consideracion}`).join('\n');
+  }
+
   return `FECHA HOY: ${hoy.toISOString().split('T')[0]}
 
 PATRIMONIO NETO:
@@ -1076,11 +1087,8 @@ ${txs || 'Sin transacciones registradas'}
 PRESUPUESTO PROYECTADO (próximos 12 meses):
 ${resumenPpto || 'Sin presupuesto cargado'}
 
-DECISIONES ESTRATÉGICAS PENDIENTES:
-1. Cerrar cuenta AV Villas (tiene costo mensual, hipoteca se paga por PSE)
-2. Cerrar Banco de Bogotá al cancelar TC Visa Platinum (*4762, saldo: ${fmt(Math.abs(estado.productos.find(p => p.id === 'P14')?.saldoActual || 0))})
-3. Evaluar traslado nómina BBVA → Bancolombia`;
-}
+CONSIDERACIONES Y DECISIONES ACTUALES (mantenidas por Nacho, son verdades vigentes sobre su situación):
+${notasContexto || 'Sin consideraciones registradas'}`;
 
 async function enviarMensajeChat(textoForzado) {
   const input = document.getElementById('chat-input');
@@ -1128,7 +1136,9 @@ INSTRUCCIONES DE COMPORTAMIENTO:
 - Montos en formato $#,##0 COP.
 - Señala riesgos concretos, no genéricos. No repitas consejos ya dados en la sesión.
 - Para decisiones grandes, considera siempre el orden de prioridad de objetivos y la situación de déficit actual.
-- Si no tienes contexto suficiente, dilo claramente. Máximo una pregunta de clarificación por turno.`;
+- Si no tienes contexto suficiente, dilo claramente. Máximo una pregunta de clarificación por turno.`
+      
+GESTIÓN DE CONSIDERACIONES: Nacho mantiene una lista de "consideraciones y decisiones actuales" (mostrada arriba en el contexto), que él edita desde la app. Esa lista es la memoria persistente de su situación. Cuando en la conversación detectes que una consideración quedó obsoleta (por ejemplo, una decisión que ya ejecutó) o que surge un dato permanente nuevo y relevante que debería quedar registrado, sugiérele explícitamente que actualice esa nota: indícale si conviene desactivarla, editarla o agregar una nueva, y con qué texto. No edites tú las notas (no tienes esa capacidad); solo recomiéndale el cambio para que él lo haga desde la pestaña de notas. Hazlo solo cuando sea claramente pertinente, sin ser repetitivo.;
 
     // Agregar mensaje del usuario al historial
     chatHistorial.push({ role: 'user', content: texto });
