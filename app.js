@@ -2527,10 +2527,10 @@ function generarPptoVista() {
   const mesInicial = `${mesCorriente.getFullYear()}-${String(mesCorriente.getMonth() + 1).padStart(2, '0')}`;
   const meses = construirMeses12(mesInicial);
 
-  // Saldo inicial disponible neto = cuentas de ahorro + inversión líquida + TC de pago total (que restan)
-  // Excluye: créditos (MC Black, libranza), hipoteca, inversión LP e internacional
-  const tiposExcluidos = ['Crédito', 'Crédito Hipotecario', 'Inversión LP', 'Inversión Internacional', 'Pasivo Personal'];
-  const disponibles = estado.productos.filter(p => !tiposExcluidos.includes(p.tipo));
+  // Saldo inicial disponible = solo cuentas de ahorro + inversión líquida (Fiducuenta, Cajita)
+  // Las TC se tratan aparte (su saldo mezcla pago total con diferidos); créditos/hipoteca/inversión LP no son disponible
+  const tiposDisponibles = ['Cuenta Ahorros', 'Cuenta Inversión'];
+  const disponibles = estado.productos.filter(p => tiposDisponibles.includes(p.tipo));
   let saldoInicial = disponibles.reduce((s, p) => s + (p.saldoCierre || 0), 0);
   
   // Agrupar presupuesto por subgrupo y mes
