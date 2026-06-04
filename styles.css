@@ -718,5 +718,36 @@ tr:hover td { background: var(--bg2); }
 }
 .nota-borrar:hover { opacity: 0.7; }
 
+/* MODAL */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+.modal-contenido {
+  background: var(--bg1);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 480px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modal-contenido h3 { margin-bottom: 20px; color: var(--texto); }
+.btn-tx-editar, .btn-tx-borrar {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  padding: 2px 4px;
+}
+.btn-tx-borrar:hover, .btn-tx-editar:hover { opacity: 0.7; }
+
 Cuando hayas aplicado los tres cambios (app.js completo, nav + vista en index.html, estilos en styles.css), recarga la app en el navegador, vuelve a hacer login y ve a la pestaña Gmail.
 Confírmame qué ves.
