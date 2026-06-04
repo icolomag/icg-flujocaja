@@ -380,12 +380,12 @@ function descartarCorreo(i) {
 async function cargarDatos() {
   mostrarSpinner(true);
   try {
-    const [filasProductos, filasGrupos, filasTx, filasPpto, filasContexto] = await Promise.all([
+    const [filasProductos, filasGrupos, filasTx, filasPpto, filasContexto, filasConfig] = await Promise.all([
       leerHoja('Productos!A2:O'),
       leerHoja('Grupos!A2:C'),
       leerHoja('Transacciones!A2:L'),
       leerHoja('Presupuesto!A2:F'),
-      leerHoja('Contexto!A2:C')
+      leerHoja('Contexto!A2:C'),
       leerHoja('Config!A2:B')
     ]);
 
