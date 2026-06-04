@@ -2500,7 +2500,7 @@ function inicializarPptoVista() {
   const b2 = document.getElementById('btn-descargar-ppto');
   b1.replaceWith(b1.cloneNode(true));
   b2.replaceWith(b2.cloneNode(true));
-  document.getElementById('btn-generar-ppto').addEventListener('click', generarPptoVista);
+  document.getElementById('btn-generar-ppto').addEventListener('click', );
   document.getElementById('btn-descargar-ppto').addEventListener('click', descargarPptoVista);
 
   // Si ya hay datos generados, mostrarlos
@@ -2529,7 +2529,7 @@ function generarPptoVista() {
 
   // Saldo inicial disponible neto = cuentas de ahorro + inversión líquida + TC de pago total (que restan)
   // Excluye: créditos (MC Black, libranza), hipoteca, inversión LP e internacional
-  const tiposExcluidos = ['Crédito', 'Crédito Hipotecario', 'Inversión LP', 'Inversión Internacional'];
+  const tiposExcluidos = ['Crédito', 'Crédito Hipotecario', 'Inversión LP', 'Inversión Internacional', 'Pasivo Personal'];
   const disponibles = estado.productos.filter(p => !tiposExcluidos.includes(p.tipo));
   let saldoInicial = disponibles.reduce((s, p) => s + (p.saldoCierre || 0), 0);
   
