@@ -2500,7 +2500,7 @@ function inicializarPptoVista() {
   const b2 = document.getElementById('btn-descargar-ppto');
   b1.replaceWith(b1.cloneNode(true));
   b2.replaceWith(b2.cloneNode(true));
-  document.getElementById('btn-generar-ppto').addEventListener('click', );
+  document.getElementById('btn-generar-ppto').addEventListener('click', generarPptoVista);
   document.getElementById('btn-descargar-ppto').addEventListener('click', descargarPptoVista);
 
   // Si ya hay datos generados, mostrarlos
