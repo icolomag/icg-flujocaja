@@ -1886,6 +1886,18 @@ function inicializarCierre() {
     </div>
   `).join('');
 
+  // Cuentas de ahorro (para conciliación)
+  const cuentas = estado.productos.filter(p =>
+    p.tipo === 'Cuenta Ahorros' && p.estado === 'Activa'
+  );
+  document.getElementById('cierre-cuentas').innerHTML = cuentas.map(p => `
+    <div class="cierre-linea" data-id="${p.id}">
+      <span class="cierre-nombre">${p.nombre}</span>
+      <span class="cierre-saldo-actual">App: ${fmt(p.saldoActual)}</span>
+      <input type="number" class="cierre-input-cuenta" placeholder="Saldo real del banco" />
+    </div>
+  `).join('');
+
   // Listeners
   ['btn-cierre-calcular','btn-cierre-guardar','btn-cierre-cancelar'].forEach(id => {
     const b = document.getElementById(id);
@@ -1941,6 +1953,48 @@ function calcularCierre() {
     html += `<div>📈 <strong>${prod.nombre}</strong>: saldo ${fmt(saldoFinal)} · entradas ${fmt(entradas)} · salidas ${fmt(salidas)} → rendimiento: <span class="${clsRend}">${fmt(rendimiento)}</span></div>`;
   });
 
+  // Cuentas de ahorro: conciliación (saldo calculado vs real)
+  document.querySelectorAll('#cierre-cuentas .cierre-linea').forEach(linea => {
+    const id = linea.dataset.id;
+    const inp = linea.querySelector('.cierre-input-cuenta');
+    const saldoReal = parseFloat(inp.value);
+    if (isNaN(saldoReal)) return; // si no ingresó saldo real, no la concilia
+    const prod = estado.productos.find(p => p.id === id);
+    const saldoCalculado = prod.saldoActual;
+    const diferencia = saldoReal - saldoCalculado;
+
+    actualizaciones.push({
+      id, nombre: prod.nombre, tipo: 'cuenta',
+      saldoFinal: saldoReal, saldoCalculado, diferencia
+    });
+
+    if (Math.abs(diferencia) < 1) {
+      html += `<div>🏦 <strong>${prod.nombre}</strong>: ${fmt(saldoReal)} — <span class="rend-positivo">cuadra ✓</span></div>`;
+    } else {
+      const signo = diferencia > 0 ? '+' : '';
+      html += `<div>🏦 <strong>${prod.nombre}</strong>: real ${fmt(saldoReal)} vs app ${fmt(saldoCalculado)} → <span class="rend-negativo">diferencia ${signo}${fmt(diferencia)}</span></div>`;
+    }
+  });
+
+  // Si hay cuentas con diferencia, mostrar opciones de conciliación
+  const conDiferencia = actualizaciones.filter(a => a.tipo === 'cuenta' && Math.abs(a.diferencia) >= 1);
+  if (conDiferencia.length) {
+    html += `<div style="margin-top:14px;padding:12px;background:var(--bg3);border-radius:8px;border-left:3px solid var(--amarillo)">
+      <strong>⚠️ Hay diferencias de conciliación.</strong><br>
+      <span style="font-size:13px;color:var(--texto2)">Elige cómo proceder antes de confirmar:</span>
+      <div style="margin-top:8px">
+        <label style="display:block;margin:6px 0;font-size:13px">
+          <input type="radio" name="modo-dif" value="corregir" checked />
+          Voy a corregir los movimientos (cancelo y reviso el historial)
+        </label>
+        <label style="display:block;margin:6px 0;font-size:13px">
+          <input type="radio" name="modo-dif" value="ajuste" />
+          Registrar la diferencia como ajuste de conciliación
+        </label>
+      </div>
+    </div>`;
+  }
+
   if (!actualizaciones.length) {
     mostrarToast('Ingresa al menos un saldo');
     return;
@@ -1955,21 +2009,31 @@ function calcularCierre() {
 
 async function guardarCierre() {
   if (!cierreCalculado) return;
+  const { mes, actualizaciones } = cierreCalculado;
+
+  // Determinar el modo de manejo de diferencias (si aplica)
+  const modoDif = document.querySelector('input[name="modo-dif"]:checked')?.value;
+  const conDiferencia = actualizaciones.filter(a => a.tipo === 'cuenta' && Math.abs(a.diferencia) >= 1);
+
+  // Si hay diferencias y eligió "corregir", no cerramos: lo mandamos a revisar
+  if (conDiferencia.length && modoDif === 'corregir') {
+    mostrarToast('Cierre pausado: corrige los movimientos en el historial y vuelve a calcular');
+    return;
+  }
+
+  // Fecha de cierre = último día del mes cerrado
+  const [anio, mesNum] = mes.split('-').map(Number);
+  const ultimoDia = new Date(anio, mesNum, 0).getDate();
+  const fechaCierre = `${mes}-${String(ultimoDia).padStart(2, '0')}`;
+
+  if (!confirm(`Vas a cerrar ${mes}. Después de esto, las transacciones de ese mes y anteriores quedarán bloqueadas. ¿Continuar?`)) return;
+
   mostrarSpinner(true);
   try {
-    const { mes, actualizaciones } = cierreCalculado;
-    const fechaCierre = `${mes}-28`;
+    const filas = await leerHoja('Productos!A2:O');
 
     for (const a of actualizaciones) {
-      // Actualizar saldo del producto
-      const filas = await leerHoja('Productos!A2:G');
-      for (let i = 0; i < filas.length; i++) {
-        if (filas[i][0] === a.id) {
-          await actualizarCelda(`Productos!G${i + 2}`, a.saldoFinal);
-          break;
-        }
-      }
-      // Para inversión, registrar el rendimiento como ingreso
+      // Para inversión: registrar el rendimiento como ingreso/pérdida
       if (a.tipo === 'inversion' && Math.abs(a.rendimiento) > 0) {
         await escribirFila('Transacciones', [
           'TX' + Date.now() + Math.floor(Math.random()*100),
@@ -1977,11 +2041,48 @@ async function guardarCierre() {
           a.id, '', a.rendimiento, `Rendimiento ${a.nombre} - cierre ${mes}`, 'Cierre', 'TRUE', ''
         ]);
       }
+
+      // Para cuenta con diferencia en modo "ajuste": registrar transacción de ajuste
+      if (a.tipo === 'cuenta' && Math.abs(a.diferencia) >= 1 && modoDif === 'ajuste') {
+        const esIngreso = a.diferencia > 0;
+        await escribirFila('Transacciones', [
+          'TX' + Date.now() + Math.floor(Math.random()*100),
+          fechaCierre,
+          esIngreso ? 'Ingreso' : 'Egreso',
+          esIngreso ? 'Ingresos' : 'Otros egresos',
+          esIngreso ? 'Otros ingresos' : 'Ajuste de conciliación',
+          a.id, '', Math.abs(a.diferencia),
+          `Ajuste conciliación cierre ${mes}`, 'Cierre', 'TRUE', ''
+        ]);
+      }
     }
 
+    // Recargar para que las transacciones nuevas (rendimientos/ajustes) entren al estado
     await cargarDatos();
+
+    // Congelar Saldo_Cierre (columna O) de TODOS los productos con su saldo actual ya calculado
+    const filas2 = await leerHoja('Productos!A2:O');
+    for (let i = 0; i < estado.productos.length; i++) {
+      const prod = estado.productos[i];
+      // Para deuda e inversión, usar el saldo final ingresado; para el resto, el calculado
+      const act = actualizaciones.find(a => a.id === prod.id);
+      let saldoCongelar;
+      if (act && (act.tipo === 'deuda' || act.tipo === 'inversion')) {
+        saldoCongelar = act.saldoFinal;
+      } else {
+        saldoCongelar = prod.saldoActual; // cuentas de ahorro y demás: saldo ya calculado/conciliado
+      }
+      await actualizarCelda(`Productos!O${i + 2}`, saldoCongelar);
+      await actualizarCelda(`Productos!G${i + 2}`, saldoCongelar);
+    }
+
+    // Actualizar la fecha de último cierre en Config
+    await actualizarCelda('Config!B2', fechaCierre);
+
+    await cargarDatos();
+    await recalcularSaldos(true);
     mostrarSpinner(false);
-    mostrarToast('✓ Cierre de mes registrado');
+    mostrarToast(`✓ Mes ${mes} cerrado correctamente`);
     resetCierre();
     cambiarVista('dashboard');
   } catch(e) {
@@ -1990,7 +2091,6 @@ async function guardarCierre() {
     console.error(e);
   }
 }
-
 function resetCierre() {
   cierreCalculado = null;
   document.getElementById('cierre-resultado').innerHTML = '';
