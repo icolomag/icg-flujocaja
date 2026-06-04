@@ -470,7 +470,7 @@ function renderCards(contenedorId, productos) {
     if (p.estado === 'Cerrar') badge = '<span class="card-estado estado-cerrar">Cerrar</span>';
     else if (p.estado === 'Cancelar') badge = '<span class="card-estado estado-cancelar">Cancelar</span>';
     else if (p.estado === 'Evaluar cierre') badge = '<span class="card-estado estado-evaluar">Evaluar</span>';
-    return `<div class="card">
+    return `<div class="card card-clicable" onclick="abrirExtractoProducto('${p.id}')" title="Ver extracto">
       <div class="card-nombre">${p.nombre}</div>
       <div class="card-entidad">${p.entidad}</div>
       <div class="card-saldo ${clsSaldo}">${fmt(p.saldoActual)}</div>
@@ -754,6 +754,7 @@ function cambiarVista(vista) {
   if (vista === 'nomina') inicializarNomina();
   if (vista === 'cierre') inicializarCierre();
   if (vista === 'notas') inicializarNotas();
+  if (vista === 'extracto') inicializarExtracto();
 }
 
 // ── FASE 4: INGESTA POR IMAGEN ────────────────────────────────────────
@@ -2388,6 +2389,106 @@ async function borrarFila(nombreHoja, numeroFila) {
   });
   if (!resp.ok) throw new Error('Error borrando fila: ' + resp.status);
   return resp.json();
+}
+
+// ── EXTRACTO POR PRODUCTO ─────────────────────────────────────────────
+function inicializarExtracto(productoIdInicial = null) {
+  const sel = document.getElementById('extracto-producto');
+  sel.innerHTML = estado.productos.map(p =>
+    `<option value="${p.id}">${p.nombre} (${p.entidad})</option>`).join('');
+
+  if (productoIdInicial) sel.value = productoIdInicial;
+
+  // Rango por defecto: del último cierre + 1 día hasta hoy (mes corriente)
+  const hoy = new Date();
+  const desde = new Date(estado.ultimoCierre);
+  desde.setDate(desde.getDate() + 1);
+  document.getElementById('extracto-desde').value = desde.toISOString().split('T')[0];
+  document.getElementById('extracto-hasta').value = hoy.toISOString().split('T')[0];
+
+  const btn = document.getElementById('btn-extracto-filtrar');
+  btn.replaceWith(btn.cloneNode(true));
+  document.getElementById('btn-extracto-filtrar').addEventListener('click', renderExtracto);
+
+  renderExtracto();
+}
+
+function renderExtracto() {
+  const id = document.getElementById('extracto-producto').value;
+  const desde = document.getElementById('extracto-desde').value;
+  const hasta = document.getElementById('extracto-hasta').value;
+  const prod = estado.productos.find(p => p.id === id);
+  if (!prod) return;
+
+  // Saldo de apertura: saldoCierre + movimientos desde el cierre hasta "desde" (exclusivo)
+  let saldoApertura = prod.saldoCierre;
+  estado.transacciones.forEach(t => {
+    if (!t.fecha || t.fecha <= estado.ultimoCierre) return;
+    if (t.fecha >= desde) return; // solo lo anterior al rango
+    saldoApertura += movimientoEnProducto(t, id);
+  });
+
+  // Movimientos dentro del rango
+  const movs = estado.transacciones
+    .filter(t => t.fecha && t.fecha >= desde && t.fecha <= hasta)
+    .filter(t => t.origen === id || t.destino === id)
+    .sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  // Saldo corriente acumulado
+  let saldoCorriente = saldoApertura;
+  const filas = movs.map(t => {
+    const delta = movimientoEnProducto(t, id);
+    saldoCorriente += delta;
+    const signo = delta >= 0 ? '+' : '';
+    const cls = delta >= 0 ? 'tx-ingreso' : 'tx-egreso';
+    return `<tr>
+      <td>${t.fecha}</td>
+      <td>${t.tipo}</td>
+      <td>${t.grupo} > ${t.subgrupo}</td>
+      <td>${t.descripcion || ''}</td>
+      <td class="${cls}">${signo}${fmt(delta)}</td>
+      <td>${fmt(saldoCorriente)}</td>
+    </tr>`;
+  }).join('');
+
+  const saldoFinal = saldoCorriente;
+  const esDeuda = prod.tipo === 'Crédito' || prod.tipo === 'Crédito Hipotecario';
+
+  document.getElementById('extracto-resumen').innerHTML = `
+    <div class="extracto-saldo-box">
+      <div class="label">Saldo apertura</div>
+      <div class="valor">${fmt(saldoApertura)}</div>
+    </div>
+    <div class="extracto-saldo-box">
+      <div class="label">Movimientos (${movs.length})</div>
+      <div class="valor">${fmt(saldoFinal - saldoApertura)}</div>
+    </div>
+    <div class="extracto-saldo-box">
+      <div class="label">Saldo final</div>
+      <div class="valor">${fmt(saldoFinal)}</div>
+    </div>`;
+
+  document.getElementById('extracto-tabla').innerHTML = movs.length ? `<table>
+    <thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Descripción</th><th>Movimiento</th><th>Saldo</th></tr></thead>
+    <tbody>${filas}</tbody>
+  </table>` : '<p style="color:var(--texto2);margin-top:16px">Sin movimientos en este rango.</p>';
+}
+
+// Calcula cómo afecta una transacción al saldo de un producto (+/-)
+function movimientoEnProducto(t, id) {
+  const monto = t.monto || 0;
+  if (t.tipo === 'Ingreso' && t.origen === id) return monto;
+  if (t.tipo === 'Egreso' && t.origen === id) return -monto;
+  if (t.tipo === 'Traslado') {
+    if (t.destino === id) return monto;
+    if (t.origen === id) return -monto;
+  }
+  return 0;
+}
+
+function abrirExtractoProducto(productoId) {
+  cambiarVista('extracto');
+  inicializarExtracto(productoId);
 }
 
 // ── UTILIDADES ────────────────────────────────────────────────────────
