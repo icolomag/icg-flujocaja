@@ -443,6 +443,29 @@
         <div id="notas-lista"></div>
       </div>
 
+      <!-- VISTA: EXTRACTO POR PRODUCTO -->
+      <div id="vista-extracto" class="vista oculto">
+        <h2>Extracto por producto</h2>
+        <div class="extracto-controles">
+          <div class="campo">
+            <label>Producto</label>
+            <select id="extracto-producto"></select>
+          </div>
+          <div class="campo">
+            <label>Desde</label>
+            <input type="date" id="extracto-desde" />
+          </div>
+          <div class="campo">
+            <label>Hasta</label>
+            <input type="date" id="extracto-hasta" />
+          </div>
+          <button id="btn-extracto-filtrar" class="btn-primario">Ver</button>
+        </div>
+
+        <div id="extracto-resumen" class="extracto-resumen"></div>
+        <div id="extracto-tabla"></div>
+      </div>
+
     </main>
   </div>
 
