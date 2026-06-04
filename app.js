@@ -522,18 +522,24 @@ function renderHistorial(filtroTipo = '', filtroGrupo = '') {
   let txs = [...estado.transacciones].reverse();
   if (filtroTipo) txs = txs.filter(t => t.tipo === filtroTipo);
   if (filtroGrupo) txs = txs.filter(t => t.grupo === filtroGrupo);
-
   const el = document.getElementById('tabla-historial');
   if (!txs.length) { el.innerHTML = '<p style="color:var(--texto2);margin-top:16px">Sin transacciones registradas.</p>'; return; }
 
+  const corte = estado.ultimoCierre;
+
   el.innerHTML = `<table>
     <thead><tr>
-      <th>Fecha</th><th>Tipo</th><th>Grupo</th><th>Subgrupo</th><th>Producto</th><th>Monto</th><th>Descripción</th><th>Fuente</th>
+      <th>Fecha</th><th>Tipo</th><th>Grupo</th><th>Subgrupo</th><th>Producto</th><th>Monto</th><th>Descripción</th><th>Fuente</th><th></th>
     </tr></thead>
     <tbody>
       ${txs.map(t => {
         const cls = t.tipo === 'Ingreso' ? 'tx-ingreso' : t.tipo === 'Egreso' ? 'tx-egreso' : 'tx-traslado';
         const prod = estado.productos.find(p => p.id === t.origen);
+        const editable = t.fecha && t.fecha > corte;
+        const acciones = editable
+          ? `<button class="btn-tx-editar" onclick="abrirEdicionTx('${t.id}')" title="Editar">✏️</button>
+             <button class="btn-tx-borrar" onclick="eliminarTx('${t.id}')" title="Eliminar">🗑</button>`
+          : `<span title="Mes cerrado" style="color:var(--texto2);font-size:12px">🔒</span>`;
         return `<tr>
           <td>${t.fecha}</td>
           <td class="${cls}">${t.tipo}</td>
@@ -543,6 +549,7 @@ function renderHistorial(filtroTipo = '', filtroGrupo = '') {
           <td class="${cls}">${t.tipo === 'Egreso' ? '-' : ''}${fmt(Math.abs(t.monto))}</td>
           <td>${t.descripcion || ''}</td>
           <td style="color:var(--texto2);font-size:12px">${t.fuente || ''}</td>
+          <td style="white-space:nowrap">${acciones}</td>
         </tr>`;
       }).join('')}
     </tbody>
