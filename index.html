@@ -57,6 +57,7 @@
       <button class="nav-btn" data-vista="notas">📝 Notas</button>
       <button class="nav-btn" data-vista="proyeccion">📈 Proyección</button>
       <button class="nav-btn" data-vista="presupuesto">📊 vs Presupuesto</button>
+      <button class="nav-btn" data-vista="ppto-vista">📅 Presupuesto 12M</button>
       <button class="nav-btn" data-vista="cierre">🔄 Cierre mes</button>
     </nav>
 
@@ -465,6 +466,19 @@
 
         <div id="extracto-resumen" class="extracto-resumen"></div>
         <div id="extracto-tabla"></div>
+      </div>
+
+      <!-- VISTA: PRESUPUESTO RODANTE 12 MESES -->
+      <div id="vista-ppto-vista" class="vista oculto">
+        <h2>Presupuesto rodante — 12 meses</h2>
+        <p style="color:var(--texto2);font-size:13px;margin-bottom:16px">
+          Vista desde el mes corriente, partiendo del saldo disponible al último cierre. Se genera bajo demanda.
+        </p>
+        <div class="extracto-controles">
+          <button id="btn-generar-ppto" class="btn-primario">🔄 Generar / actualizar vista</button>
+          <button id="btn-descargar-ppto" class="btn-secundario">⬇ Descargar Excel</button>
+        </div>
+        <div id="ppto-vista-tabla" style="overflow-x:auto;margin-top:16px"></div>
       </div>
 
     </main>
