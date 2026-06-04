@@ -777,5 +777,8 @@ tr:hover td { background: var(--bg2); }
 .extracto-saldo-box .label { font-size: 12px; color: var(--texto2); margin-bottom: 4px; }
 .extracto-saldo-box .valor { font-size: 20px; font-weight: 700; }
 
+.card-clicable { cursor: pointer; transition: transform 0.1s, border-color 0.1s; }
+.card-clicable:hover { transform: translateY(-2px); border-color: var(--acento); }
+
 Cuando hayas aplicado los tres cambios (app.js completo, nav + vista en index.html, estilos en styles.css), recarga la app en el navegador, vuelve a hacer login y ve a la pestaña Gmail.
 Confírmame qué ves.
