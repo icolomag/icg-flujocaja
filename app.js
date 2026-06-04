@@ -381,11 +381,12 @@ async function cargarDatos() {
   mostrarSpinner(true);
   try {
     const [filasProductos, filasGrupos, filasTx, filasPpto, filasContexto] = await Promise.all([
-      leerHoja('Productos!A2:N'),
+      leerHoja('Productos!A2:O'),
       leerHoja('Grupos!A2:C'),
       leerHoja('Transacciones!A2:L'),
       leerHoja('Presupuesto!A2:F'),
       leerHoja('Contexto!A2:C')
+      leerHoja('Config!A2:B')
     ]);
 
     estado.productos = filasProductos.map(f => ({
@@ -396,7 +397,8 @@ async function cargarDatos() {
       cuotaFija: parseFloat(f[8]) || 0,
       fechaPago: f[9] || '', fechaCorte: f[10] || '',
       disponible: f[11] === 'TRUE', estado: f[12] || 'Activa',
-      comentarios: f[13] || ''
+      comentarios: f[13] || '',
+      saldoCierre: parseFloat(f[14]) || 0
     }));
 
     estado.grupos = filasGrupos.map(f => ({ tipo: f[0], grupo: f[1], subgrupo: f[2] }));
@@ -414,6 +416,13 @@ async function cargarDatos() {
     estado.contexto = filasContexto
       .filter(f => f[0] && (f[2] || '').toString().toUpperCase() !== 'FALSE')
       .map(f => ({ categoria: f[0], consideracion: f[1] || '' }));
+
+    estado.config = {};
+    filasConfig.forEach(f => { if (f[0]) estado.config[f[0]] = f[1]; });
+    estado.ultimoCierre = estado.config.ultimo_cierre || '2026-05-31';
+
+    // Recalcular saldos en memoria (saldo cierre + movimientos del mes)
+    estado.productos.forEach(p => { p.saldoActual = calcularSaldoProducto(p.id); });
 
     renderDashboard();
     poblarSelectores();
@@ -698,12 +707,19 @@ function resetFormTr() {
 }
 
 // ── ACTUALIZACIÓN DE SALDOS ───────────────────────────────────────────
-async function actualizarSaldoProducto(productoId, tipo, monto) {
-  const filas = await leerHoja('Productos!A2:G');
+async function actualizarSaldoProducto(productoId) {
+  // Con el nuevo enfoque, el saldo se recalcula desde saldoCierre + movimientos.
+  // Las transacciones ya están en estado.transacciones (la fuente de verdad).
+  const prod = estado.productos.find(p => p.id === productoId);
+  if (!prod) return;
+
+  const nuevoSaldo = calcularSaldoProducto(productoId);
+  prod.saldoActual = nuevoSaldo;
+
+  // Escribir al Sheet para mantenerlo al día
+  const filas = await leerHoja('Productos!A2:O');
   for (let i = 0; i < filas.length; i++) {
     if (filas[i][0] === productoId) {
-      const saldoActual = parseFloat(filas[i][6]) || 0;
-      const nuevoSaldo = tipo === 'Ingreso' ? saldoActual + monto : saldoActual - monto;
       await actualizarCelda(`Productos!G${i + 2}`, nuevoSaldo);
       break;
     }
@@ -2045,6 +2061,43 @@ async function borrarNota(indice) {
   } catch(e) {
     mostrarSpinner(false);
     mostrarToast('Error eliminando nota: ' + e.message);
+  }
+}
+
+// ── CÁLCULO DE SALDOS POR PERÍODO ─────────────────────────────────────
+// El saldo actual = saldo de cierre + movimientos posteriores al último cierre
+function calcularSaldoProducto(productoId) {
+  const prod = estado.productos.find(p => p.id === productoId);
+  if (!prod) return 0;
+
+  let saldo = prod.saldoCierre;
+  const corte = estado.ultimoCierre; // fecha del último cierre (YYYY-MM-DD)
+
+  estado.transacciones.forEach(t => {
+    if (!t.fecha || t.fecha <= corte) return; // solo movimientos posteriores al cierre
+
+    const monto = t.monto || 0;
+    if (t.tipo === 'Ingreso' && t.origen === productoId) saldo += monto;
+    else if (t.tipo === 'Egreso' && t.origen === productoId) saldo -= monto;
+    else if (t.tipo === 'Traslado') {
+      if (t.origen === productoId) saldo -= monto;
+      if (t.destino === productoId) saldo += monto;
+    }
+  });
+
+  return saldo;
+}
+
+// Recalcula todos los saldos en memoria y los escribe al Sheet (columna G)
+async function recalcularSaldos(escribirSheet = true) {
+  const filas = await leerHoja('Productos!A2:O');
+  for (let i = 0; i < estado.productos.length; i++) {
+    const prod = estado.productos[i];
+    const nuevoSaldo = calcularSaldoProducto(prod.id);
+    prod.saldoActual = nuevoSaldo;
+    if (escribirSheet) {
+      await actualizarCelda(`Productos!G${i + 2}`, nuevoSaldo);
+    }
   }
 }
 
