@@ -442,5 +442,54 @@
   <div id="spinner" class="spinner oculto">Cargando...</div>
 
   <script src="app.js"></script>
+
+  <!-- MODAL EDICIÓN DE TRANSACCIÓN -->
+<div id="modal-editar-tx" class="modal-overlay oculto">
+  <div class="modal-contenido">
+    <h3>Editar transacción</h3>
+    <input type="hidden" id="edit-tx-id" />
+    <div class="campo">
+      <label>Fecha</label>
+      <input type="date" id="edit-tx-fecha" />
+    </div>
+    <div class="campo">
+      <label>Tipo</label>
+      <select id="edit-tx-tipo">
+        <option value="Ingreso">Ingreso</option>
+        <option value="Egreso">Egreso</option>
+        <option value="Traslado">Traslado</option>
+      </select>
+    </div>
+    <div class="campo">
+      <label>Grupo</label>
+      <select id="edit-tx-grupo"></select>
+    </div>
+    <div class="campo">
+      <label>Subgrupo</label>
+      <select id="edit-tx-subgrupo"></select>
+    </div>
+    <div class="campo">
+      <label>Producto origen</label>
+      <select id="edit-tx-origen"></select>
+    </div>
+    <div class="campo" id="edit-tx-destino-cont">
+      <label>Producto destino (solo traslados)</label>
+      <select id="edit-tx-destino"></select>
+    </div>
+    <div class="campo">
+      <label>Monto</label>
+      <input type="number" id="edit-tx-monto" />
+    </div>
+    <div class="campo">
+      <label>Descripción</label>
+      <input type="text" id="edit-tx-descripcion" />
+    </div>
+    <div class="campo-accion">
+      <button id="btn-edit-tx-guardar" class="btn-confirmar">✓ Guardar cambios</button>
+      <button id="btn-edit-tx-cancelar" class="btn-secundario">Cancelar</button>
+    </div>
+  </div>
+</div>
+  
 </body>
 </html>
