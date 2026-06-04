@@ -538,7 +538,7 @@ function renderHistorial(filtroTipo = '', filtroGrupo = '') {
         const editable = t.fecha && t.fecha > corte;
         const acciones = editable
           ? `<button class="btn-tx-editar" onclick="abrirEdicionTx('${t.id}')" title="Editar">✏️</button>
-             <button class="btn-tx-borrar" onclick="eliminarTx('${t.id}')" title="Eliminar">🗑</button>`
+             <button class="btn-tx-borrar" onclick="eliminarTx('${t.id}')" title="Eliminar">X</button>`
           : `<span title="Mes cerrado" style="color:var(--texto2);font-size:12px">🔒</span>`;
         return `<tr>
           <td>${t.fecha}</td>
