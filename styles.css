@@ -751,6 +751,13 @@ tr:hover td { background: var(--bg2); }
 }
 .btn-tx-editar:hover, .btn-tx-borrar:hover { opacity: 1; }
 
+.btn-tx-borrar {
+  color: #ff5555;
+  opacity: 1;
+  filter: none;
+}
+.btn-tx-borrar:hover { color: #ff8888; }
+
 /* EXTRACTO POR PRODUCTO */
 .extracto-controles {
   display: flex;
