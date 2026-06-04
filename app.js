@@ -2108,6 +2108,188 @@ async function recalcularSaldos(escribirSheet = true) {
   }
 }
 
+// ── EDICIÓN Y ELIMINACIÓN DE TRANSACCIONES ────────────────────────────
+function abrirEdicionTx(txId) {
+  const t = estado.transacciones.find(x => x.id === txId);
+  if (!t) { mostrarToast('Transacción no encontrada'); return; }
+
+  document.getElementById('edit-tx-id').value = t.id;
+  document.getElementById('edit-tx-fecha').value = t.fecha;
+  document.getElementById('edit-tx-tipo').value = t.tipo;
+  document.getElementById('edit-tx-monto').value = t.monto;
+  document.getElementById('edit-tx-descripcion').value = t.descripcion || '';
+
+  // Poblar selectores de producto
+  const opcionesProd = estado.productos.map(p =>
+    `<option value="${p.id}">${p.nombre}</option>`).join('');
+  document.getElementById('edit-tx-origen').innerHTML = opcionesProd;
+  document.getElementById('edit-tx-destino').innerHTML = opcionesProd;
+  document.getElementById('edit-tx-origen').value = t.origen;
+  document.getElementById('edit-tx-destino').value = t.destino || '';
+
+  // Poblar grupos según tipo
+  poblarGruposEdicion(t.tipo, t.grupo, t.subgrupo);
+
+  // Mostrar/ocultar destino según tipo
+  toggleDestinoEdicion(t.tipo);
+
+  // Listeners
+  document.getElementById('edit-tx-tipo').onchange = (e) => {
+    poblarGruposEdicion(e.target.value);
+    toggleDestinoEdicion(e.target.value);
+  };
+  document.getElementById('edit-tx-grupo').onchange = (e) => {
+    poblarSubgruposEdicion(document.getElementById('edit-tx-tipo').value, e.target.value);
+  };
+  document.getElementById('btn-edit-tx-guardar').onclick = guardarEdicionTx;
+  document.getElementById('btn-edit-tx-cancelar').onclick = cerrarEdicionTx;
+
+  document.getElementById('modal-editar-tx').classList.remove('oculto');
+}
+
+function poblarGruposEdicion(tipo, grupoSel = '', subSel = '') {
+  const grupos = [...new Set(estado.grupos.filter(g => g.tipo === tipo).map(g => g.grupo))];
+  document.getElementById('edit-tx-grupo').innerHTML = grupos.map(g =>
+    `<option value="${g}">${g}</option>`).join('');
+  if (grupoSel) document.getElementById('edit-tx-grupo').value = grupoSel;
+  const grupoActual = grupoSel || grupos[0];
+  poblarSubgruposEdicion(tipo, grupoActual, subSel);
+}
+
+function poblarSubgruposEdicion(tipo, grupo, subSel = '') {
+  const subs = estado.grupos.filter(g => g.tipo === tipo && g.grupo === grupo).map(g => g.subgrupo);
+  document.getElementById('edit-tx-subgrupo').innerHTML = subs.map(s =>
+    `<option value="${s}">${s}</option>`).join('');
+  if (subSel) document.getElementById('edit-tx-subgrupo').value = subSel;
+}
+
+function toggleDestinoEdicion(tipo) {
+  document.getElementById('edit-tx-destino-cont').style.display =
+    tipo === 'Traslado' ? 'block' : 'none';
+}
+
+function cerrarEdicionTx() {
+  document.getElementById('modal-editar-tx').classList.add('oculto');
+}
+
+async function guardarEdicionTx() {
+  const txId = document.getElementById('edit-tx-id').value;
+  const fecha = document.getElementById('edit-tx-fecha').value;
+  const tipo = document.getElementById('edit-tx-tipo').value;
+  const grupo = document.getElementById('edit-tx-grupo').value;
+  const subgrupo = document.getElementById('edit-tx-subgrupo').value;
+  const origen = document.getElementById('edit-tx-origen').value;
+  const destino = tipo === 'Traslado' ? document.getElementById('edit-tx-destino').value : '';
+  const monto = parseFloat(document.getElementById('edit-tx-monto').value) || 0;
+  const descripcion = document.getElementById('edit-tx-descripcion').value;
+
+  // Validar que la fecha siga siendo del período abierto
+  if (fecha <= estado.ultimoCierre) {
+    mostrarToast('No puedes mover la transacción a un mes ya cerrado');
+    return;
+  }
+  if (monto <= 0) { mostrarToast('El monto debe ser mayor a cero'); return; }
+
+  mostrarSpinner(true);
+  try {
+    // Localizar la fila en el Sheet
+    const filas = await leerHoja('Transacciones!A2:L');
+    let filaReal = -1;
+    for (let i = 0; i < filas.length; i++) {
+      if (filas[i][0] === txId) { filaReal = i + 2; break; }
+    }
+    if (filaReal === -1) { mostrarToast('No se encontró en el Sheet'); mostrarSpinner(false); return; }
+
+    // Actualizar la fila completa (columnas B a I; A es el ID que no cambia)
+    await actualizarRango(`Transacciones!B${filaReal}:I${filaReal}`,
+      [[fecha, tipo, grupo, subgrupo, origen, destino, monto, descripcion]]);
+
+    await cargarDatos();
+    await recalcularSaldos(true);
+    mostrarSpinner(false);
+    cerrarEdicionTx();
+    renderHistorial();
+    renderDashboard();
+    mostrarToast('✓ Transacción actualizada');
+  } catch(e) {
+    mostrarSpinner(false);
+    mostrarToast('Error al editar: ' + e.message);
+    console.error(e);
+  }
+}
+
+async function eliminarTx(txId) {
+  const t = estado.transacciones.find(x => x.id === txId);
+  if (!t) return;
+  if (t.fecha <= estado.ultimoCierre) { mostrarToast('No puedes eliminar una transacción de un mes cerrado'); return; }
+  if (!confirm(`¿Eliminar esta transacción?\n${t.fecha} · ${t.grupo} > ${t.subgrupo} · ${fmt(t.monto)}`)) return;
+
+  mostrarSpinner(true);
+  try {
+    const filas = await leerHoja('Transacciones!A2:L');
+    let filaReal = -1;
+    for (let i = 0; i < filas.length; i++) {
+      if (filas[i][0] === txId) { filaReal = i + 2; break; }
+    }
+    if (filaReal === -1) { mostrarToast('No se encontró en el Sheet'); mostrarSpinner(false); return; }
+
+    await borrarFila('Transacciones', filaReal);
+    await cargarDatos();
+    await recalcularSaldos(true);
+    mostrarSpinner(false);
+    renderHistorial();
+    renderDashboard();
+    mostrarToast('✓ Transacción eliminada');
+  } catch(e) {
+    mostrarSpinner(false);
+    mostrarToast('Error al eliminar: ' + e.message);
+    console.error(e);
+  }
+}
+
+// ── FUNCIONES AUXILIARES DE SHEETS ────────────────────────────────────
+async function actualizarRango(rango, valores) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(rango)}?valueInputOption=USER_ENTERED`;
+  const resp = await fetch(url, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${estado.accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values: valores })
+  });
+  if (!resp.ok) throw new Error('Error actualizando rango: ' + resp.status);
+  return resp.json();
+}
+
+async function borrarFila(nombreHoja, numeroFila) {
+  // 1. Obtener el sheetId numérico de la hoja por su nombre
+  const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}`;
+  const metaResp = await fetch(metaUrl, { headers: { Authorization: `Bearer ${estado.accessToken}` } });
+  const meta = await metaResp.json();
+  const hoja = meta.sheets.find(s => s.properties.title === nombreHoja);
+  if (!hoja) throw new Error('Hoja no encontrada: ' + nombreHoja);
+  const sheetId = hoja.properties.sheetId;
+
+  // 2. Borrar la fila (numeroFila es 1-indexed; la API usa 0-indexed)
+  const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}:batchUpdate`;
+  const resp = await fetch(batchUrl, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${estado.accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId: sheetId,
+            dimension: 'ROWS',
+            startIndex: numeroFila - 1,
+            endIndex: numeroFila
+          }
+        }
+      }]
+    })
+  });
+  if (!resp.ok) throw new Error('Error borrando fila: ' + resp.status);
+  return resp.json();
+}
+
 // ── UTILIDADES ────────────────────────────────────────────────────────
 function fmt(n) {
   return '$' + Math.round(n).toLocaleString('es-CO');
