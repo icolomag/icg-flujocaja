@@ -787,5 +787,14 @@ tr:hover td { background: var(--bg2); }
 .card-clicable { cursor: pointer; transition: transform 0.1s, border-color 0.1s; }
 .card-clicable:hover { transform: translateY(-2px); border-color: var(--acento); }
 
+.tabla-ppto { font-size: 12px; border-collapse: collapse; width: 100%; }
+.tabla-ppto th, .tabla-ppto td { border: 1px solid var(--borde); padding: 5px 8px; text-align: right; white-space: nowrap; }
+.tabla-ppto th:first-child, .tabla-ppto td:first-child { text-align: left; position: sticky; left: 0; background: var(--bg1); }
+.tabla-ppto th { background: var(--bg3); color: var(--texto); }
+.tabla-ppto .fila-grupo td { background: var(--bg3); font-weight: 700; text-align: left; }
+.tabla-ppto .fila-total td { background: var(--bg2); }
+.tabla-ppto .fila-saldo td { background: var(--bg2); border-top: 2px solid var(--acento); }
+.tabla-ppto .fila-balance td { border-top: 1px solid var(--acento); }
+
 Cuando hayas aplicado los tres cambios (app.js completo, nav + vista en index.html, estilos en styles.css), recarga la app en el navegador, vuelve a hacer login y ve a la pestaña Gmail.
 Confírmame qué ves.
