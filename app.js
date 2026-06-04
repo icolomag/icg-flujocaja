@@ -755,6 +755,7 @@ function cambiarVista(vista) {
   if (vista === 'cierre') inicializarCierre();
   if (vista === 'notas') inicializarNotas();
   if (vista === 'extracto') inicializarExtracto();
+  if (vista === 'ppto-vista') inicializarPptoVista();
 }
 
 // ── FASE 4: INGESTA POR IMAGEN ────────────────────────────────────────
@@ -2489,6 +2490,171 @@ function movimientoEnProducto(t, id) {
 function abrirExtractoProducto(productoId) {
   cambiarVista('extracto');
   inicializarExtracto(productoId);
+}
+
+// ── PRESUPUESTO RODANTE 12 MESES ──────────────────────────────────────
+let pptoVistaData = null; // guarda la matriz para descarga
+
+function inicializarPptoVista() {
+  const b1 = document.getElementById('btn-generar-ppto');
+  const b2 = document.getElementById('btn-descargar-ppto');
+  b1.replaceWith(b1.cloneNode(true));
+  b2.replaceWith(b2.cloneNode(true));
+  document.getElementById('btn-generar-ppto').addEventListener('click', generarPptoVista);
+  document.getElementById('btn-descargar-ppto').addEventListener('click', descargarPptoVista);
+
+  // Si ya hay datos generados, mostrarlos
+  if (pptoVistaData) renderPptoVista();
+  else document.getElementById('ppto-vista-tabla').innerHTML =
+    '<p style="color:var(--texto2)">Pulsa "Generar" para construir la vista.</p>';
+}
+
+function construirMeses12(desde) {
+  // desde: 'YYYY-MM' del mes corriente. Devuelve array de 12 'YYYY-MM'
+  const [a, m] = desde.split('-').map(Number);
+  const meses = [];
+  for (let i = 0; i < 12; i++) {
+    const fecha = new Date(a, m - 1 + i, 1);
+    meses.push(`${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return meses;
+}
+
+function generarPptoVista() {
+  // Mes corriente = mes siguiente al último cierre
+  const corte = new Date(estado.ultimoCierre);
+  const mesCorriente = new Date(corte.getFullYear(), corte.getMonth() + 1, 1);
+  const mesInicial = `${mesCorriente.getFullYear()}-${String(mesCorriente.getMonth() + 1).padStart(2, '0')}`;
+  const meses = construirMeses12(mesInicial);
+
+  // Saldo inicial disponible = suma de Saldo_Cierre de productos disponibles (excluye inversión LP e internacional)
+  const disponibles = estado.productos.filter(p =>
+    p.tipo !== 'Inversión LP' && p.tipo !== 'Inversión Internacional'
+  );
+  let saldoInicial = disponibles.reduce((s, p) => s + (p.saldoCierre || 0), 0);
+
+  // Agrupar presupuesto por subgrupo y mes
+  // Estructura: ingresos[subgrupo][mes] = monto ; egresos[subgrupo][mes] = monto
+  const ingresos = {}, egresos = {};
+  estado.presupuesto.forEach(p => {
+    const mes = (p.fecha || '').substring(0, 7);
+    if (!meses.includes(mes)) return;
+    const destino = p.tipo === 'Ingreso' ? ingresos : egresos;
+    const clave = `${p.grupo} > ${p.subgrupo}`;
+    if (!destino[clave]) destino[clave] = {};
+    destino[clave][mes] = (destino[clave][mes] || 0) + p.monto;
+  });
+
+  // Calcular totales y saldos encadenados
+  const totalIngMes = {}, totalEgrMes = {}, balanceMes = {}, saldoIniMes = {}, saldoFinMes = {};
+  let saldoArrastre = saldoInicial;
+  meses.forEach(mes => {
+    let ti = 0, te = 0;
+    Object.values(ingresos).forEach(sub => ti += (sub[mes] || 0));
+    Object.values(egresos).forEach(sub => te += (sub[mes] || 0));
+    totalIngMes[mes] = ti;
+    totalEgrMes[mes] = te;
+    balanceMes[mes] = ti - te;
+    saldoIniMes[mes] = saldoArrastre;
+    saldoFinMes[mes] = saldoArrastre + (ti - te);
+    saldoArrastre = saldoFinMes[mes];
+  });
+
+  pptoVistaData = { meses, ingresos, egresos, totalIngMes, totalEgrMes, balanceMes, saldoIniMes, saldoFinMes };
+  renderPptoVista();
+  mostrarToast('✓ Vista generada');
+}
+
+function renderPptoVista() {
+  if (!pptoVistaData) return;
+  const { meses, ingresos, egresos, totalIngMes, totalEgrMes, balanceMes, saldoIniMes, saldoFinMes } = pptoVistaData;
+
+  const etiquetaMes = m => {
+    const [a, mm] = m.split('-');
+    return new Date(a, mm - 1, 1).toLocaleDateString('es-CO', { month: 'short', year: '2-digit' });
+  };
+
+  let html = '<table class="tabla-ppto"><thead><tr><th>Concepto</th>';
+  meses.forEach(m => html += `<th>${etiquetaMes(m)}</th>`);
+  html += '</tr></thead><tbody>';
+
+  // Saldo inicial
+  html += '<tr class="fila-saldo"><td><strong>Saldo inicial</strong></td>';
+  meses.forEach(m => html += `<td>${fmt(saldoIniMes[m])}</td>`);
+  html += '</tr>';
+
+  // INGRESOS
+  html += `<tr class="fila-grupo"><td colspan="${meses.length + 1}">INGRESOS</td></tr>`;
+  Object.keys(ingresos).sort().forEach(sub => {
+    html += `<tr><td>${sub}</td>`;
+    meses.forEach(m => html += `<td>${ingresos[sub][m] ? fmt(ingresos[sub][m]) : '—'}</td>`);
+    html += '</tr>';
+  });
+  html += '<tr class="fila-total"><td><strong>Total ingresos</strong></td>';
+  meses.forEach(m => html += `<td><strong>${fmt(totalIngMes[m])}</strong></td>`);
+  html += '</tr>';
+
+  // EGRESOS
+  html += `<tr class="fila-grupo"><td colspan="${meses.length + 1}">EGRESOS</td></tr>`;
+  Object.keys(egresos).sort().forEach(sub => {
+    html += `<tr><td>${sub}</td>`;
+    meses.forEach(m => html += `<td>${egresos[sub][m] ? fmt(egresos[sub][m]) : '—'}</td>`);
+    html += '</tr>';
+  });
+  html += '<tr class="fila-total"><td><strong>Total egresos</strong></td>';
+  meses.forEach(m => html += `<td><strong>${fmt(totalEgrMes[m])}</strong></td>`);
+  html += '</tr>';
+
+  // Balance y saldo final
+  html += '<tr class="fila-balance"><td><strong>Balance del mes</strong></td>';
+  meses.forEach(m => {
+    const cls = balanceMes[m] >= 0 ? 'tx-ingreso' : 'tx-egreso';
+    html += `<td class="${cls}"><strong>${fmt(balanceMes[m])}</strong></td>`;
+  });
+  html += '</tr>';
+
+  html += '<tr class="fila-saldo"><td><strong>Saldo final</strong></td>';
+  meses.forEach(m => {
+    const cls = saldoFinMes[m] >= 0 ? '' : 'tx-egreso';
+    html += `<td class="${cls}"><strong>${fmt(saldoFinMes[m])}</strong></td>`;
+  });
+  html += '</tr>';
+
+  html += '</tbody></table>';
+  document.getElementById('ppto-vista-tabla').innerHTML = html;
+}
+
+function descargarPptoVista() {
+  if (!pptoVistaData) { mostrarToast('Primero genera la vista'); return; }
+  const { meses, ingresos, egresos, totalIngMes, totalEgrMes, balanceMes, saldoIniMes, saldoFinMes } = pptoVistaData;
+
+  const etiquetaMes = m => {
+    const [a, mm] = m.split('-');
+    return new Date(a, mm - 1, 1).toLocaleDateString('es-CO', { month: 'short', year: '2-digit' });
+  };
+
+  // Construir matriz de arrays para SheetJS
+  const filas = [];
+  filas.push(['Concepto', ...meses.map(etiquetaMes)]);
+  filas.push(['Saldo inicial', ...meses.map(m => saldoIniMes[m])]);
+  filas.push(['INGRESOS']);
+  Object.keys(ingresos).sort().forEach(sub => {
+    filas.push([sub, ...meses.map(m => ingresos[sub][m] || 0)]);
+  });
+  filas.push(['Total ingresos', ...meses.map(m => totalIngMes[m])]);
+  filas.push(['EGRESOS']);
+  Object.keys(egresos).sort().forEach(sub => {
+    filas.push([sub, ...meses.map(m => egresos[sub][m] || 0)]);
+  });
+  filas.push(['Total egresos', ...meses.map(m => totalEgrMes[m])]);
+  filas.push(['Balance del mes', ...meses.map(m => balanceMes[m])]);
+  filas.push(['Saldo final', ...meses.map(m => saldoFinMes[m])]);
+
+  const ws = XLSX.utils.aoa_to_sheet(filas);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Presupuesto 12M');
+  const hoy = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb, `ICG_Presupuesto_12M_${hoy}.xlsx`);
 }
 
 // ── UTILIDADES ────────────────────────────────────────────────────────
