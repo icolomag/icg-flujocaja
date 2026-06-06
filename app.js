@@ -715,6 +715,40 @@ function resetFormTr() {
   document.getElementById('btn-tr-preview').classList.remove('oculto');
 }
 
+// ── PAGOS DE TC COMO TRASLADO ─────────────────────────────────────────
+// Dado el grupo+subgrupo de un movimiento, decide si es un pago de TC.
+// Si lo es, devuelve los datos como Traslado (cuenta origen → TC destino).
+// Si no, los devuelve tal cual (movimiento normal).
+function construirFilaTx(d) {
+  // d = { fecha, tipo, grupo, subgrupo, producto, monto, descripcion, fuente, notas }
+  const g = estado.grupos.find(x => x.grupo === d.grupo && x.subgrupo === d.subgrupo);
+  const tcDestino = g && g.cuentaDestino ? g.cuentaDestino : '';
+
+  if (tcDestino) {
+    // Es pago de TC → traslado: sale de la cuenta origen, abona la TC
+    return {
+      esTraslado: true,
+      origen: d.producto,
+      destino: tcDestino,
+      fila: [
+        'TX' + Date.now(), d.fecha, 'Traslado', d.grupo, d.subgrupo,
+        d.producto, tcDestino, d.monto, d.descripcion, d.fuente, 'TRUE', d.notas || ''
+      ]
+    };
+  }
+
+  // Movimiento normal
+  return {
+    esTraslado: false,
+    origen: d.producto,
+    destino: '',
+    fila: [
+      'TX' + Date.now(), d.fecha, d.tipo, d.grupo, d.subgrupo,
+      d.producto, '', d.monto, d.descripcion, d.fuente, 'TRUE', d.notas || ''
+    ]
+  };
+}
+
 // ── ACTUALIZACIÓN DE SALDOS ───────────────────────────────────────────
 async function actualizarSaldoProducto(productoId) {
   // Con el nuevo enfoque, el saldo se recalcula desde saldoCierre + movimientos.
