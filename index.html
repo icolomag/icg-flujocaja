@@ -168,6 +168,24 @@
             <label>Notas (opcional)</label>
             <input type="text" id="tx-notas" placeholder="" />
           </div>
+          <div id="tx-cuotas-bloque" class="campo oculto">
+            <label class="check-diferir">
+              <input type="checkbox" id="tx-diferir"> Diferir a cuotas
+            </label>
+            <div id="tx-num-cuotas-bloque" class="oculto">
+              <label for="tx-num-cuotas">Número de cuotas</label>
+              <input type="number" id="tx-num-cuotas" min="2" value="2">
+              <label class="check-diferir" style="margin-top:8px">
+                <input type="checkbox" id="tx-con-interes"> Esta compra genera intereses
+              </label>
+            </div>
+          </div>
+          <div class="campo-accion">
+            <div id="tx-preview" class="preview oculto"></div>
+            <button id="btn-tx-preview" class="btn-primario">Vista previa</button>
+            <button id="btn-tx-guardar" class="btn-confirmar oculto">✓ Confirmar y guardar</button>
+            <button id="btn-tx-cancelar" class="btn-secundario oculto">Cancelar</button>
+          </div>
           <div class="campo-accion">
             <div id="tx-preview" class="preview oculto"></div>
             <button id="btn-tx-preview" class="btn-primario">Vista previa</button>
