@@ -358,7 +358,10 @@ async function confirmarCorreo(gmailId) {
   const descripcion = document.getElementById(`correo-desc-${gmailId}`).value;
 
   if (!producto || !grupo || !subgrupo) { mostrarToast('Completa todos los campos'); return; }
-
+  if (esPeriodoCerrado(c.fecha)) {
+    mostrarToast('🔒 No se puede registrar: la fecha pertenece a un mes ya cerrado');
+    return;
+  }
   mostrarSpinner(true);
   const r = construirFilaTx({
     fecha: c.fecha, tipo: c.tipo, grupo, subgrupo,
@@ -585,6 +588,10 @@ function configurarFormularios() {
 
   document.getElementById('btn-tx-guardar').addEventListener('click', async () => {
     const datos = leerFormTx();
+    if (esPeriodoCerrado(datos.fecha)) {
+      mostrarToast('🔒 No se puede registrar: la fecha pertenece a un mes ya cerrado');
+      return;
+    }
     mostrarSpinner(true);
     datos.fuente = 'Manual';
     const r = construirFilaTx(datos);
@@ -709,6 +716,14 @@ function resetFormTr() {
   document.getElementById('btn-tr-guardar').classList.add('oculto');
   document.getElementById('btn-tr-cancelar').classList.add('oculto');
   document.getElementById('btn-tr-preview').classList.remove('oculto');
+}
+
+// ── VALIDACIÓN DE PERÍODO CERRADO ─────────────────────────────────────
+// Devuelve true si la fecha cae en un mes ya cerrado (≤ último cierre).
+// Esas transacciones no se pueden registrar: el pasado está bloqueado.
+function esPeriodoCerrado(fecha) {
+  if (!fecha) return false;
+  return fecha <= estado.ultimoCierre;
 }
 
 // ── PAGOS DE TC COMO TRASLADO ─────────────────────────────────────────
@@ -1016,6 +1031,10 @@ async function registrarMovimientoImagen(i) {
   const descripcion = document.getElementById(`img-desc-${i}`).value;
 
   if (!producto || !grupo || !subgrupo) { mostrarToast('Completa todos los campos'); return; }
+  if (esPeriodoCerrado(m.fecha)) {
+    mostrarToast('🔒 No se puede registrar: la fecha pertenece a un mes ya cerrado');
+    return;
+  }
 
   mostrarSpinner(true);
   const r = construirFilaTx({
