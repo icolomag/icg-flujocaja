@@ -384,7 +384,7 @@ async function cargarDatos() {
   try {
     const [filasProductos, filasGrupos, filasTx, filasPpto, filasContexto, filasConfig] = await Promise.all([
       leerHoja('Productos!A2:O'),
-      leerHoja('Grupos!A2:C'),
+      leerHoja('Grupos!A2:D'),
       leerHoja('Transacciones!A2:L'),
       leerHoja('Presupuesto!A2:F'),
       leerHoja('Contexto!A2:C'),
@@ -403,7 +403,7 @@ async function cargarDatos() {
       saldoCierre: parseFloat(f[14]) || 0
     }));
 
-    estado.grupos = filasGrupos.map(f => ({ tipo: f[0], grupo: f[1], subgrupo: f[2] }));
+    estado.grupos = filasGrupos.map(f => ({ tipo: f[0], grupo: f[1], subgrupo: f[2], cuentaDestino: f[3] || '' }));
     estado.transacciones = filasTx.map(f => ({
       id: f[0], fecha: f[1], tipo: f[2], grupo: f[3], subgrupo: f[4],
       origen: f[5], destino: f[6], monto: parseFloat(f[7]) || 0,
