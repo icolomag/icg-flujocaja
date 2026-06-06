@@ -388,13 +388,14 @@ function descartarCorreo(gmailId) {
 async function cargarDatos() {
   mostrarSpinner(true);
   try {
-    const [filasProductos, filasGrupos, filasTx, filasPpto, filasContexto, filasConfig] = await Promise.all([
+    const [filasProductos, filasGrupos, filasTx, filasPpto, filasContexto, filasConfig, filasCuotas] = await Promise.all([
       leerHoja('Productos!A2:O'),
       leerHoja('Grupos!A2:D'),
       leerHoja('Transacciones!A2:L'),
       leerHoja('Presupuesto!A2:F'),
       leerHoja('Contexto!A2:C'),
-      leerHoja('Config!A2:B')
+      leerHoja('Config!A2:B'),
+      leerHoja('Cuotas_TC!A2:K')
     ]);
 
     estado.productos = filasProductos.map(f => ({
@@ -424,6 +425,14 @@ async function cargarDatos() {
     estado.contexto = filasContexto
       .filter(f => f[0] && (f[2] || '').toString().toUpperCase() !== 'FALSE')
       .map(f => ({ categoria: f[0], consideracion: f[1] || '' }));
+
+    estado.cuotasTC = filasCuotas.map(f => ({
+      idCuota: f[0], idCompra: f[1], idTx: f[2], productoTC: f[3],
+      descripcion: f[4], numCuota: parseInt(f[5]) || 0,
+      totalCuotas: parseInt(f[6]) || 0, capitalCuota: parseFloat(f[7]) || 0,
+      fechaVencimiento: f[8] || '', estado: f[9] || 'Pendiente',
+      conInteres: (f[10] || '').toString().toUpperCase() === 'SI'
+    }));
 
     estado.config = {};
     filasConfig.forEach(f => { if (f[0]) estado.config[f[0]] = f[1]; });
