@@ -671,6 +671,27 @@ function configurarFormularios() {
       document.getElementById('filtro-grupo').value
     );
   });
+
+  // ── Mostrar opción de cuotas solo si el producto es Tarjeta Crédito ──
+  const selProducto = document.getElementById('tx-producto');
+  const bloqueCuotas = document.getElementById('tx-cuotas-bloque');
+  const chkDiferir = document.getElementById('tx-diferir');
+  const bloqueNumCuotas = document.getElementById('tx-num-cuotas-bloque');
+
+  function actualizarVisibilidadCuotas() {
+    const prod = estado.productos.find(p => p.id === selProducto.value);
+    const esTC = prod && prod.tipo === 'Tarjeta Crédito';
+    bloqueCuotas.classList.toggle('oculto', !esTC);
+    if (!esTC) {
+      chkDiferir.checked = false;
+      bloqueNumCuotas.classList.add('oculto');
+    }
+  }
+
+  selProducto.addEventListener('change', actualizarVisibilidadCuotas);
+  chkDiferir.addEventListener('change', () => {
+    bloqueNumCuotas.classList.toggle('oculto', !chkDiferir.checked);
+  });
 }
 
 function leerFormTx() {
