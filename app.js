@@ -308,14 +308,14 @@ function renderCorreosPendientes(correos) {
     return;
   }
 
-  el.innerHTML = correos.map((c, i) => {
+  el.innerHTML = correos.map((c) => {
     const optsProductos = estado.productos
       .map(p => `<option value="${p.id}" ${p.id === c.productoSugerido ? 'selected' : ''}>${p.nombre}</option>`)
       .join('');
     const optsGrupos = [...new Set(estado.grupos.filter(g => g.tipo === c.tipo).map(g => g.grupo))]
       .map(g => `<option value="${g}">${g}</option>`).join('');
 
-    return `<div class="correo-card" id="correo-${i}">
+    return `<div class="correo-card" id="correo-${c.gmailId}">
       <div class="correo-header">
         <span class="correo-banco">${c.banco}</span>
         <span class="correo-fecha">${c.fecha}</span>
@@ -324,36 +324,38 @@ function renderCorreosPendientes(correos) {
       <div class="correo-asunto">${c.textoPreview}</div>
       <div class="correo-monto">${fmt(c.monto)}</div>
       <div class="correo-campos">
-        <select class="correo-select" id="correo-prod-${i}">${optsProductos}</select>
-        <select class="correo-select" id="correo-grupo-${i}" onchange="actualizarSubgruposCorreo(${i})">${optsGrupos}</select>
-        <select class="correo-select" id="correo-sub-${i}"></select>
-        <input class="correo-input" id="correo-desc-${i}" type="text" placeholder="Descripción" value="${c.asunto.substring(0,50)}" />
+        <select class="correo-select" id="correo-prod-${c.gmailId}">${optsProductos}</select>
+        <select class="correo-select" id="correo-grupo-${c.gmailId}" onchange="actualizarSubgruposCorreo('${c.gmailId}')">${optsGrupos}</select>
+        <select class="correo-select" id="correo-sub-${c.gmailId}"></select>
+        <input class="correo-input" id="correo-desc-${c.gmailId}" type="text" placeholder="Descripción" value="${c.asunto.substring(0,50)}" />
       </div>
       <div class="correo-acciones">
-        <button class="btn-confirmar" onclick="confirmarCorreo(${i})">✓ Registrar</button>
-        <button class="btn-secundario" onclick="descartarCorreo(${i})">Ignorar</button>
+        <button class="btn-confirmar" onclick="confirmarCorreo('${c.gmailId}')">✓ Registrar</button>
+        <button class="btn-secundario" onclick="descartarCorreo('${c.gmailId}')">Ignorar</button>
       </div>
     </div>`;
   }).join('');
 
-  correos.forEach((c, i) => actualizarSubgruposCorreo(i, c.tipo));
+  correos.forEach((c) => actualizarSubgruposCorreo(c.gmailId, c.tipo));
 }
 
-function actualizarSubgruposCorreo(i, tipoForzado) {
-  const tipo = tipoForzado || estado.correosPendientes[i]?.tipo || 'Egreso';
-  const grupo = document.getElementById(`correo-grupo-${i}`)?.value;
+function actualizarSubgruposCorreo(gmailId, tipoForzado) {
+  const correo = estado.correosPendientes.find(c => c.gmailId === gmailId);
+  const tipo = tipoForzado || correo?.tipo || 'Egreso';
+  const grupo = document.getElementById(`correo-grupo-${gmailId}`)?.value;
   if (!grupo) return;
   const subs = estado.grupos.filter(g => g.grupo === grupo).map(g => g.subgrupo);
-  const el = document.getElementById(`correo-sub-${i}`);
+  const el = document.getElementById(`correo-sub-${gmailId}`);
   if (el) el.innerHTML = subs.map(s => `<option value="${s}">${s}</option>`).join('');
 }
 
-async function confirmarCorreo(i) {
-  const c = estado.correosPendientes[i];
-  const producto = document.getElementById(`correo-prod-${i}`).value;
-  const grupo = document.getElementById(`correo-grupo-${i}`).value;
-  const subgrupo = document.getElementById(`correo-sub-${i}`).value;
-  const descripcion = document.getElementById(`correo-desc-${i}`).value;
+async function confirmarCorreo(gmailId) {
+  const c = estado.correosPendientes.find(x => x.gmailId === gmailId);
+  if (!c) { mostrarToast('No se encontró el correo'); return; }
+  const producto = document.getElementById(`correo-prod-${gmailId}`).value;
+  const grupo = document.getElementById(`correo-grupo-${gmailId}`).value;
+  const subgrupo = document.getElementById(`correo-sub-${gmailId}`).value;
+  const descripcion = document.getElementById(`correo-desc-${gmailId}`).value;
 
   if (!producto || !grupo || !subgrupo) { mostrarToast('Completa todos los campos'); return; }
 
@@ -367,13 +369,13 @@ async function confirmarCorreo(i) {
   await cargarDatos();
   mostrarSpinner(false);
   mostrarToast('✓ Transacción registrada desde Gmail');
-  document.getElementById(`correo-${i}`).remove();
-  estado.correosPendientes.splice(i, 1);
+  document.getElementById(`correo-${gmailId}`)?.remove();
+  estado.correosPendientes = estado.correosPendientes.filter(x => x.gmailId !== gmailId);
 }
 
-function descartarCorreo(i) {
-  document.getElementById(`correo-${i}`).remove();
-  estado.correosPendientes.splice(i, 1);
+function descartarCorreo(gmailId) {
+  document.getElementById(`correo-${gmailId}`)?.remove();
+  estado.correosPendientes = estado.correosPendientes.filter(x => x.gmailId !== gmailId);
 }
 
 // ── CARGA DE DATOS ────────────────────────────────────────────────────
