@@ -467,6 +467,17 @@ function renderDashboard() {
   const totDeu = deudas.reduce((s, p) => s + p.saldoActual, 0);
   const neto = totDis + totInv + totDeu;
 
+  const mesActual = new Date().toISOString().substring(0, 7);
+  const comprometido = calcularComprometidoMes(mesActual);
+  const dispNeto = totDis - comprometido;
+  const elComp = document.getElementById('total-comprometido');
+  const elDispNeto = document.getElementById('disponible-neto');
+  if (elComp) elComp.textContent = fmt(comprometido);
+  if (elDispNeto) {
+    elDispNeto.textContent = fmt(dispNeto);
+    elDispNeto.className = dispNeto >= 0 ? 'verde' : 'rojo';
+  }
+
   document.getElementById('total-disponible').textContent = fmt(totDis);
   document.getElementById('total-no-disponible').textContent = fmt(totInv);
   document.getElementById('total-deudas').textContent = fmt(totDeu);
@@ -2245,6 +2256,16 @@ async function borrarNota(indice) {
 }
 
 // ── CÁLCULO DE SALDOS POR PERÍODO ─────────────────────────────────────
+// Suma el capital de cuotas TC pendientes que vencen dentro del mes indicado (YYYY-MM)
+function calcularComprometidoMes(mesYYYYMM) {
+  if (!estado.cuotasTC) return 0;
+  return estado.cuotasTC
+    .filter(c => c.estado === 'Pendiente'
+              && c.fechaVencimiento
+              && c.fechaVencimiento.substring(0, 7) === mesYYYYMM)
+    .reduce((s, c) => s + c.capitalCuota, 0);
+}
+
 // El saldo actual = saldo de cierre + movimientos posteriores al último cierre
 function calcularSaldoProducto(productoId) {
   const prod = estado.productos.find(p => p.id === productoId);
