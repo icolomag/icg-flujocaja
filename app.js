@@ -309,6 +309,7 @@ function renderCorreosPendientes(correos) {
   }
 
   el.innerHTML = correos.map((c) => {
+    const cerrado = esPeriodoCerrado(c.fecha);
     const optsProductos = estado.productos
       .map(p => `<option value="${p.id}" ${p.id === c.productoSugerido ? 'selected' : ''}>${p.nombre}</option>`)
       .join('');
@@ -329,8 +330,11 @@ function renderCorreosPendientes(correos) {
         <select class="correo-select" id="correo-sub-${c.gmailId}"></select>
         <input class="correo-input" id="correo-desc-${c.gmailId}" type="text" placeholder="Descripción" value="${c.asunto.substring(0,50)}" />
       </div>
+      ${cerrado ? '<div class="correo-cerrado-aviso">🔒 Fecha de un mes ya cerrado — no se puede registrar</div>' : ''}
       <div class="correo-acciones">
-        <button class="btn-confirmar" onclick="confirmarCorreo('${c.gmailId}')">✓ Registrar</button>
+        ${cerrado
+          ? '<button class="btn-confirmar" disabled style="opacity:0.5;cursor:not-allowed;">🔒 Mes cerrado</button>'
+          : `<button class="btn-confirmar" onclick="confirmarCorreo('${c.gmailId}')">✓ Registrar</button>`}
         <button class="btn-secundario" onclick="descartarCorreo('${c.gmailId}')">Ignorar</button>
       </div>
     </div>`;
