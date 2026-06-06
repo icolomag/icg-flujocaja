@@ -587,15 +587,12 @@ function configurarFormularios() {
   document.getElementById('btn-tx-guardar').addEventListener('click', async () => {
     const datos = leerFormTx();
     mostrarSpinner(true);
-    const id = 'TX' + Date.now();
-    await escribirFila('Transacciones', [
-      id, datos.fecha, datos.tipo, datos.grupo, datos.subgrupo,
-      datos.producto, '', datos.monto, datos.descripcion, 'Manual', 'TRUE', datos.notas
-    ]);
-    await actualizarSaldoProducto(datos.producto, datos.tipo, datos.monto);
+    datos.fuente = 'Manual';
+    const r = construirFilaTx(datos);
+    await escribirFila('Transacciones', r.fila);
     await cargarDatos();
     mostrarSpinner(false);
-    mostrarToast('✓ Transacción registrada');
+    mostrarToast(r.esTraslado ? '✓ Pago de TC registrado' : '✓ Transacción registrada');
     resetFormTx();
     cambiarVista('dashboard');
   });
