@@ -1018,15 +1018,14 @@ async function registrarMovimientoImagen(i) {
   if (!producto || !grupo || !subgrupo) { mostrarToast('Completa todos los campos'); return; }
 
   mostrarSpinner(true);
-  const id = 'TX' + Date.now();
-  await escribirFila('Transacciones', [
-    id, m.fecha, m.tipo, grupo, subgrupo,
-    producto, '', m.monto, descripcion, 'Imagen', 'TRUE', ''
-  ]);
-  await actualizarSaldoProducto(producto, m.tipo, m.monto);
+  const r = construirFilaTx({
+    fecha: m.fecha, tipo: m.tipo, grupo, subgrupo,
+    producto, monto: m.monto, descripcion, fuente: 'Imagen', notas: ''
+  });
+  await escribirFila('Transacciones', r.fila);
   await cargarDatos();
   mostrarSpinner(false);
-  mostrarToast('✓ Movimiento registrado');
+  mostrarToast(r.esTraslado ? '✓ Pago de TC registrado' : '✓ Movimiento registrado');
   document.getElementById(`img-mov-${i}`).remove();
 }
 
