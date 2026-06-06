@@ -360,15 +360,14 @@ async function confirmarCorreo(gmailId) {
   if (!producto || !grupo || !subgrupo) { mostrarToast('Completa todos los campos'); return; }
 
   mostrarSpinner(true);
-  const id = 'TX' + Date.now();
-  await escribirFila('Transacciones', [
-    id, c.fecha, c.tipo, grupo, subgrupo,
-    producto, '', c.monto, descripcion, 'Gmail', 'TRUE', c.gmailId
-  ]);
-  await actualizarSaldoProducto(producto, c.tipo, c.monto);
+  const r = construirFilaTx({
+    fecha: c.fecha, tipo: c.tipo, grupo, subgrupo,
+    producto, monto: c.monto, descripcion, fuente: 'Gmail', notas: c.gmailId
+  });
+  await escribirFila('Transacciones', r.fila);
   await cargarDatos();
   mostrarSpinner(false);
-  mostrarToast('✓ Transacción registrada desde Gmail');
+  mostrarToast(r.esTraslado ? '✓ Pago de TC registrado desde Gmail' : '✓ Transacción registrada desde Gmail');
   document.getElementById(`correo-${gmailId}`)?.remove();
   estado.correosPendientes = estado.correosPendientes.filter(x => x.gmailId !== gmailId);
 }
