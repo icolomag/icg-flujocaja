@@ -972,6 +972,7 @@ function renderMovimientosImagen(movimientos) {
   </div>`;
 
   movimientos.forEach((m, i) => {
+    const cerrado = esPeriodoCerrado(m.fecha);
     const clsMonto = m.tipo === 'Ingreso' ? 'tx-ingreso' : 'tx-egreso';
     const badge = m.existe
       ? '<span class="badge-existe">✓ Ya registrado</span>'
@@ -983,7 +984,13 @@ function renderMovimientosImagen(movimientos) {
     const optsGrupos = [...new Set(estado.grupos.filter(g => g.tipo === m.tipo).map(g => g.grupo))]
       .map(g => `<option value="${g}">${g}</option>`).join('');
 
-    const accionesHtml = m.existe ? '' : `
+    let accionesHtml = '';
+    if (m.existe) {
+      accionesHtml = '';
+    } else if (cerrado) {
+      accionesHtml = '<div class="correo-cerrado-aviso">🔒 Fecha de un mes ya cerrado — no se puede registrar</div>';
+    } else {
+      accionesHtml = `
       <div class="movimiento-campos">
         <select class="correo-select" id="img-prod-${i}">${optsProductos}</select>
         <select class="correo-select" id="img-grupo-${i}" onchange="actualizarSubgruposImagen(${i})">${optsGrupos}</select>
@@ -994,6 +1001,7 @@ function renderMovimientosImagen(movimientos) {
         <button class="btn-confirmar" onclick="registrarMovimientoImagen(${i})">✓ Registrar</button>
         <button class="btn-secundario" onclick="descartarMovimientoImagen(${i})">Ignorar</button>
       </div>`;
+    }
 
     html += `<div class="movimiento-card" id="img-mov-${i}">
       <div class="movimiento-header">
