@@ -325,10 +325,11 @@ function renderCorreosPendientes(correos) {
       <div class="correo-asunto">${c.textoPreview}</div>
       <div class="correo-monto">${fmt(c.monto)}</div>
       <div class="correo-campos">
-        <select class="correo-select" id="correo-prod-${c.gmailId}">${optsProductos}</select>
+        <select class="correo-select" id="correo-prod-${c.gmailId}" onchange="avisoCuotaTC('${c.gmailId}')">${optsProductos}</select>
         <select class="correo-select" id="correo-grupo-${c.gmailId}" onchange="actualizarSubgruposCorreo('${c.gmailId}')">${optsGrupos}</select>
         <select class="correo-select" id="correo-sub-${c.gmailId}"></select>
         <input class="correo-input" id="correo-desc-${c.gmailId}" type="text" placeholder="Descripción" value="${c.asunto.substring(0,50)}" />
+        <div class="aviso-cuota-tc oculto" id="correo-aviso-${c.gmailId}" style="font-size:0.85em;color:#0a7;margin-top:4px;">ℹ️ Se registrará a 1 cuota. Para diferir, usa +Transacción.</div>
       </div>
       ${cerrado ? '<div class="correo-cerrado-aviso">🔒 Fecha de un mes ya cerrado — no se puede registrar</div>' : ''}
       <div class="correo-acciones">
@@ -341,6 +342,17 @@ function renderCorreosPendientes(correos) {
   }).join('');
 
   correos.forEach((c) => actualizarSubgruposCorreo(c.gmailId, c.tipo));
+  correos.forEach((c) => avisoCuotaTC(c.gmailId));
+}
+
+// Muestra un aviso si el producto elegido en un correo es Tarjeta Crédito.
+function avisoCuotaTC(gmailId) {
+  const prodId = document.getElementById(`correo-prod-${gmailId}`)?.value;
+  const aviso = document.getElementById(`correo-aviso-${gmailId}`);
+  if (!aviso) return;
+  const prod = estado.productos.find(p => p.id === prodId);
+  const esTC = prod && prod.tipo === 'Tarjeta Crédito';
+  aviso.classList.toggle('oculto', !esTC);
 }
 
 function actualizarSubgruposCorreo(gmailId, tipoForzado) {
