@@ -367,11 +367,18 @@ async function confirmarCorreo(gmailId) {
     return;
   }
   mostrarSpinner(true);
-  const r = construirFilaTx({
+  const datosTx = {
     fecha: c.fecha, tipo: c.tipo, grupo, subgrupo,
-    producto, monto: c.monto, descripcion, fuente: 'Gmail', notas: c.gmailId
-  });
+    producto, monto: c.monto, descripcion, fuente: 'Gmail', notas: c.gmailId,
+    numCuotas: 1, primeraCuota: '', conInteres: false
+  };
+  const r = construirFilaTx(datosTx);
   await escribirFila('Transacciones', r.fila);
+  // Si es compra con TC (no pago de TC), generar su cuota corriente
+  const prodSel = estado.productos.find(p => p.id === producto);
+  if (!r.esTraslado && prodSel && prodSel.tipo === 'Tarjeta Crédito') {
+    await generarCuotasTC(r.idTx, datosTx);
+  }
   await cargarDatos();
   mostrarSpinner(false);
   mostrarToast(r.esTraslado ? '✓ Pago de TC registrado desde Gmail' : '✓ Transacción registrada desde Gmail');
