@@ -391,6 +391,13 @@ async function confirmarCorreo(gmailId) {
   if (!r.esTraslado && prodSel && prodSel.tipo === 'Tarjeta Crédito') {
     await generarCuotasTC(r.idTx, datosTx);
   }
+  // Si es pago de TC (traslado a una tarjeta), marcar las cuotas del extracto como pagadas
+  if (r.esTraslado && r.destino) {
+    const prodDestino = estado.productos.find(p => p.id === r.destino);
+    if (prodDestino && prodDestino.tipo === 'Tarjeta Crédito') {
+      await marcarCuotasPagoExtracto(r.destino, r.idTx, m.fecha);
+    }
+  }
   await cargarDatos();
   mostrarSpinner(false);
   mostrarToast(r.esTraslado ? '✓ Pago de TC registrado desde Gmail' : '✓ Transacción registrada desde Gmail');
@@ -644,6 +651,13 @@ function configurarFormularios() {
     const prodSel = estado.productos.find(p => p.id === datos.producto);
     if (!r.esTraslado && prodSel && prodSel.tipo === 'Tarjeta Crédito') {
       await generarCuotasTC(r.idTx, datos);
+    }
+    // Si es pago de TC (traslado a una tarjeta), marcar las cuotas del extracto como pagadas
+    if (r.esTraslado && r.destino) {
+      const prodDestino = estado.productos.find(p => p.id === r.destino);
+      if (prodDestino && prodDestino.tipo === 'Tarjeta Crédito') {
+        await marcarCuotasPagoExtracto(r.destino, r.idTx, datos.fecha);
+      }
     }
     await cargarDatos();
     mostrarSpinner(false);
@@ -1304,6 +1318,13 @@ async function registrarMovimientoImagen(i) {
   const prodSel = estado.productos.find(p => p.id === producto);
   if (!r.esTraslado && prodSel && prodSel.tipo === 'Tarjeta Crédito') {
     await generarCuotasTC(r.idTx, datosTx);
+  }
+  // Si es pago de TC (traslado a una tarjeta), marcar las cuotas del extracto como pagadas
+  if (r.esTraslado && r.destino) {
+    const prodDestino = estado.productos.find(p => p.id === r.destino);
+    if (prodDestino && prodDestino.tipo === 'Tarjeta Crédito') {
+      await marcarCuotasPagoExtracto(r.destino, r.idTx, c.fecha);
+    }
   }
   await cargarDatos();
   mostrarSpinner(false);
@@ -2496,6 +2517,27 @@ function tieneCuotasIntocables(idTx) {
     c.estado !== 'Anulada' &&
     (c.estado === 'Pagada' || (c.fechaVencimiento && c.fechaVencimiento <= estado.ultimoCierre))
   );
+}
+
+// Marca como Pagada las cuotas de una TC al registrar el pago normal del extracto.
+// Cubre todas las cuotas pendientes con vencimiento hasta el fin del mes del pago
+// (incluye meses anteriores que siguieran pendientes). Guarda el ID del pago en col L.
+async function marcarCuotasPagoExtracto(tcId, idTxPago, fechaPago) {
+  // Límite: último día del mes de la fecha de pago
+  const f = new Date(fechaPago + 'T00:00:00');
+  const finMes = new Date(f.getFullYear(), f.getMonth() + 1, 0);
+  const limite = `${finMes.getFullYear()}-${String(finMes.getMonth() + 1).padStart(2, '0')}-${String(finMes.getDate()).padStart(2, '0')}`;
+
+  const filas = await leerHoja('Cuotas_TC!A2:L');
+  for (let i = 0; i < filas.length; i++) {
+    const esDeEstaTC = filas[i][3] === tcId;        // col D = Producto_TC
+    const estaPendiente = filas[i][9] === 'Pendiente'; // col J = Estado
+    const venc = filas[i][8] || '';                  // col I = Fecha_Vencimiento
+    if (esDeEstaTC && estaPendiente && venc && venc <= limite) {
+      await actualizarCelda(`Cuotas_TC!J${i + 2}`, 'Pagada');
+      await actualizarCelda(`Cuotas_TC!L${i + 2}`, idTxPago);
+    }
+  }
 }
 
 // Deshace un abono: devuelve a 'Pendiente' las cuotas que fueron pagadas por ese traslado.
