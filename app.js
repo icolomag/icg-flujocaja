@@ -2498,6 +2498,19 @@ function tieneCuotasIntocables(idTx) {
   );
 }
 
+// Deshace un abono: devuelve a 'Pendiente' las cuotas que fueron pagadas por ese traslado.
+// Identifica las cuotas por el ID del abono guardado en la columna L (ID_Tx_Pago).
+async function deshacerAbono(idTxAbono) {
+  const filas = await leerHoja('Cuotas_TC!A2:L');
+  for (let i = 0; i < filas.length; i++) {
+    // Columna L (índice 11) = ID_Tx_Pago; Columna J (índice 9) = Estado
+    if (filas[i][11] === idTxAbono && filas[i][9] === 'Pagada') {
+      await actualizarCelda(`Cuotas_TC!J${i + 2}`, 'Pendiente');
+      await actualizarCelda(`Cuotas_TC!L${i + 2}`, '');
+    }
+  }
+}
+
 // Anula (no borra) las cuotas asociadas a una transacción, marcándolas como 'Anulada'.
 // Conserva la fila para trazabilidad. Las cuotas anuladas no cuentan en "Vence este mes".
 async function anularCuotasDeTx(idTx) {
@@ -2818,6 +2831,7 @@ async function eliminarTx(txId) {
 
     await borrarFila('Transacciones', filaReal);
     await anularCuotasDeTx(txId);
+    await deshacerAbono(txId);
     await cargarDatos();
     await recalcularSaldos(true);
     mostrarSpinner(false);
