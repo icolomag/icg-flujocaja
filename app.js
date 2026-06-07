@@ -620,6 +620,11 @@ function configurarFormularios() {
     datos.fuente = 'Manual';
     const r = construirFilaTx(datos);
     await escribirFila('Transacciones', r.fila);
+    // Si la compra es con TC (no es pago de TC), generar su(s) cuota(s)
+    const prodSel = estado.productos.find(p => p.id === datos.producto);
+    if (!r.esTraslado && prodSel && prodSel.tipo === 'Tarjeta Crédito') {
+      await generarCuotasTC(r.idTx, datos);
+    }
     await cargarDatos();
     mostrarSpinner(false);
     mostrarToast(r.esTraslado ? '✓ Pago de TC registrado' : '✓ Transacción registrada');
@@ -708,6 +713,8 @@ function configurarFormularios() {
 }
 
 function leerFormTx() {
+  const diferir = document.getElementById('tx-diferir');
+  const esDiferido = diferir && diferir.checked;
   return {
     fecha: document.getElementById('tx-fecha').value,
     tipo: document.getElementById('tx-tipo').value,
@@ -716,7 +723,10 @@ function leerFormTx() {
     producto: document.getElementById('tx-producto').value,
     monto: parseFloat(document.getElementById('tx-monto').value) || 0,
     descripcion: document.getElementById('tx-descripcion').value,
-    notas: document.getElementById('tx-notas').value
+    notas: document.getElementById('tx-notas').value,
+    numCuotas: esDiferido ? (parseInt(document.getElementById('tx-num-cuotas').value) || 1) : 1,
+    primeraCuota: esDiferido ? document.getElementById('tx-primera-cuota').value : '',
+    conInteres: esDiferido ? document.getElementById('tx-con-interes').checked : false
   };
 }
 
@@ -792,19 +802,34 @@ function construirFilaTx(d) {
   // d = { fecha, tipo, grupo, subgrupo, producto, monto, descripcion, fuente, notas }
   const g = estado.grupos.find(x => x.grupo === d.grupo && x.subgrupo === d.subgrupo);
   const tcDestino = g && g.cuentaDestino ? g.cuentaDestino : '';
+  const idTx = 'TX' + Date.now();
 
   if (tcDestino) {
     // Es pago de TC → traslado: sale de la cuenta origen, abona la TC
     return {
       esTraslado: true,
+      idTx,
       origen: d.producto,
       destino: tcDestino,
       fila: [
-        'TX' + Date.now(), d.fecha, 'Traslado', d.grupo, d.subgrupo,
+        idTx, d.fecha, 'Traslado', d.grupo, d.subgrupo,
         d.producto, tcDestino, d.monto, d.descripcion, d.fuente, 'TRUE', d.notas || ''
       ]
     };
   }
+
+  // Movimiento normal
+  return {
+    esTraslado: false,
+    idTx,
+    origen: d.producto,
+    destino: '',
+    fila: [
+      idTx, d.fecha, d.tipo, d.grupo, d.subgrupo,
+      d.producto, '', d.monto, d.descripcion, d.fuente, 'TRUE', d.notas || ''
+    ]
+  };
+}
 
   // Movimiento normal
   return {
@@ -2290,6 +2315,44 @@ async function borrarNota(indice) {
 }
 
 // ── CÁLCULO DE SALDOS POR PERÍODO ─────────────────────────────────────
+// Genera y escribe las filas de Cuotas_TC para una compra diferida (o de 1 cuota).
+// idTx: ID de la transacción origen. datos: lo leído del formulario + info de cuotas.
+async function generarCuotasTC(idTx, datos) {
+  const prod = estado.productos.find(p => p.id === datos.producto);
+  if (!prod) return;
+
+  const totalCuotas = datos.numCuotas || 1;
+  const capitalPorCuota = Math.round(datos.monto / totalCuotas);
+  const idCompra = 'CMP' + Date.now();
+
+  // Fecha de la primera cuota: la que el usuario confirmó, o la calculada
+  let primera = datos.primeraCuota || calcularPrimerVencimiento(prod, datos.fecha);
+  if (!primera) {
+    mostrarToast('⚠️ No se pudo determinar la fecha de la primera cuota');
+    return;
+  }
+
+  const conInteres = datos.conInteres ? 'SI' : 'NO';
+  const base = new Date(primera + 'T00:00:00');
+  const diaCuota = base.getDate();
+
+  for (let i = 0; i < totalCuotas; i++) {
+    // Cada cuota suma un mes a la anterior, cuidando meses cortos
+    let mes = base.getMonth() + i;
+    let anio = base.getFullYear() + Math.floor(mes / 12);
+    mes = mes % 12;
+    const ultimoDia = new Date(anio, mes + 1, 0).getDate();
+    const dia = Math.min(diaCuota, ultimoDia);
+    const fechaVenc = `${anio}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+
+    const idCuota = `${idCompra}-${String(i + 1).padStart(2, '0')}`;
+    await escribirFila('Cuotas_TC', [
+      idCuota, idCompra, idTx, datos.producto, datos.descripcion,
+      i + 1, totalCuotas, capitalPorCuota, fechaVenc, 'Pendiente', conInteres
+    ]);
+  }
+}
+
 // Calcula la fecha de vencimiento de la primera cuota de una compra con TC.
 // Usa día de corte y día de pago del producto. Si no los tiene (ej. Crediágil), devuelve ''.
 function calcularPrimerVencimiento(producto, fechaCompra) {
