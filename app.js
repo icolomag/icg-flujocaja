@@ -2655,6 +2655,30 @@ function comprasConCuotasPendientes(productoTC) {
   return Object.values(grupos);
 }
 
+// Devuelve un objeto { 'YYYY-MM': capitalQueVence, ... } con el capital de cuotas TC
+// pendientes que vence en cada uno de los próximos 'numMeses' a partir de hoy.
+// Es la "ola": cuánto desembolso de TC cae cada mes.
+function calcularOlaTC(numMeses = 12) {
+  const ola = {};
+  const hoy = new Date();
+  // Inicializar los meses en cero
+  for (let i = 0; i < numMeses; i++) {
+    const f = new Date(hoy.getFullYear(), hoy.getMonth() + i, 1);
+    const clave = `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}`;
+    ola[clave] = 0;
+  }
+  // Sumar el capital de cada cuota pendiente al mes que le corresponde
+  if (estado.cuotasTC) {
+    estado.cuotasTC.forEach(c => {
+      if (c.estado === 'Pendiente' && c.fechaVencimiento) {
+        const clave = c.fechaVencimiento.substring(0, 7); // YYYY-MM
+        if (clave in ola) ola[clave] += c.capitalCuota;
+      }
+    });
+  }
+  return ola;
+}
+
 // Suma el capital de cuotas TC pendientes que vencen dentro del mes indicado (YYYY-MM)
 function calcularComprometidoMes(mesYYYYMM) {
   if (!estado.cuotasTC) return 0;
