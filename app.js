@@ -831,18 +831,6 @@ function construirFilaTx(d) {
   };
 }
 
-  // Movimiento normal
-  return {
-    esTraslado: false,
-    origen: d.producto,
-    destino: '',
-    fila: [
-      'TX' + Date.now(), d.fecha, d.tipo, d.grupo, d.subgrupo,
-      d.producto, '', d.monto, d.descripcion, d.fuente, 'TRUE', d.notas || ''
-    ]
-  };
-}
-
 // ── ACTUALIZACIÓN DE SALDOS ───────────────────────────────────────────
 async function actualizarSaldoProducto(productoId) {
   // Con el nuevo enfoque, el saldo se recalcula desde saldoCierre + movimientos.
