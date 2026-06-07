@@ -1774,10 +1774,12 @@ function renderProyeccion(datos) {
   const totIngresos = meses.reduce((s, m) => s + m.escenarios[esc].ingresos, 0);
   const totEgresos = meses.reduce((s, m) => s + m.escenarios[esc].egresos, 0);
   const totBalance = totIngresos - totEgresos;
+  const totVenceTC = Object.values(ola).reduce((s, v) => s + v, 0);
   html += `<tr class="fila-total">
     <td>TOTAL 12M</td>
     <td>${fmt(totIngresos)}</td>
     <td>-${fmt(totEgresos)}</td>
+    <td>${totVenceTC > 0 ? fmt(totVenceTC) : '—'}</td>
     <td>${totBalance >= 0 ? '+' : ''}${fmt(totBalance)}</td>
     <td>${fmt(meses[11].escenarios[esc].saldoAcumulado)}</td>
   </tr>`;
