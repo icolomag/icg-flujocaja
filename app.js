@@ -1703,6 +1703,7 @@ function generarProyeccion() {
 function renderProyeccion(datos) {
   const esc = escenarioActivo;
   const meses = datos.meses;
+  const ola = calcularOlaTC(12);
 
   // Resumen final del escenario
   const balanceFinal = meses[11].escenarios[esc].saldoAcumulado;
@@ -1745,19 +1746,25 @@ function renderProyeccion(datos) {
       <th>Mes</th>
       <th>Ingresos</th>
       <th>Egresos</th>
+      <th>Vence TC</th>
       <th>Balance</th>
       <th>Saldo acumulado</th>
     </tr></thead>
     <tbody>`;
 
-  meses.forEach(m => {
+  const hoyProy = new Date();
+  meses.forEach((m, idx) => {
     const d = m.escenarios[esc];
     const clsBalance = d.balance >= 0 ? 'positivo' : 'negativo';
     const clsSaldo = d.saldoAcumulado >= datos.saldoInicial ? 'positivo' : 'negativo';
+    const fMes = new Date(hoyProy.getFullYear(), hoyProy.getMonth() + idx, 1);
+    const claveMes = `${fMes.getFullYear()}-${String(fMes.getMonth() + 1).padStart(2, '0')}`;
+    const venceTC = ola[claveMes] || 0;
     html += `<tr>
       <td><strong>${m.mes}</strong></td>
       <td class="positivo">${fmt(d.ingresos)}</td>
       <td class="negativo">-${fmt(d.egresos)}</td>
+      <td class="${venceTC > 0 ? 'negativo' : ''}">${venceTC > 0 ? fmt(venceTC) : '—'}</td>
       <td class="${clsBalance}">${d.balance >= 0 ? '+' : ''}${fmt(d.balance)}</td>
       <td class="${clsSaldo}">${fmt(d.saldoAcumulado)}</td>
     </tr>`;
