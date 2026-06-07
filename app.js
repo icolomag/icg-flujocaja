@@ -691,6 +691,19 @@ function configurarFormularios() {
   selProducto.addEventListener('change', actualizarVisibilidadCuotas);
   chkDiferir.addEventListener('change', () => {
     bloqueNumCuotas.classList.toggle('oculto', !chkDiferir.checked);
+    if (chkDiferir.checked) {
+      const prod = estado.productos.find(p => p.id === selProducto.value);
+      const fechaCompra = document.getElementById('tx-fecha').value || new Date().toISOString().substring(0, 10);
+      const ayuda = document.getElementById('tx-primera-cuota-ayuda');
+      const venc = prod ? calcularPrimerVencimiento(prod, fechaCompra) : '';
+      if (venc) {
+        document.getElementById('tx-primera-cuota').value = venc;
+        ayuda.textContent = 'Calculada automáticamente — ajústala si el banco la pone otro día.';
+      } else {
+        document.getElementById('tx-primera-cuota').value = '';
+        ayuda.textContent = 'Este producto no tiene corte fijo. Ingresa la fecha de la primera cuota.';
+      }
+    }
   });
 }
 
@@ -2277,6 +2290,35 @@ async function borrarNota(indice) {
 }
 
 // ── CÁLCULO DE SALDOS POR PERÍODO ─────────────────────────────────────
+// Calcula la fecha de vencimiento de la primera cuota de una compra con TC.
+// Usa día de corte y día de pago del producto. Si no los tiene (ej. Crediágil), devuelve ''.
+function calcularPrimerVencimiento(producto, fechaCompra) {
+  const diaPago = parseInt(producto.fechaPago);
+  const diaCorte = parseInt(producto.fechaCorte);
+  if (!diaPago || !diaCorte) return ''; // sin datos → el usuario la pone
+
+  const fc = new Date(fechaCompra + 'T00:00:00');
+  const diaCompra = fc.getDate();
+
+  // Si compró después del corte, el vencimiento salta al mes siguiente
+  let mesVenc = fc.getMonth();
+  let anioVenc = fc.getFullYear();
+  if (diaCompra > diaCorte) mesVenc += 1;
+  // El pago siempre cae después del corte; si el día de pago es menor que el de
+  // corte, significa que el pago es el mes siguiente al corte
+  if (diaPago < diaCorte) mesVenc += 1;
+
+  if (mesVenc > 11) { mesVenc -= 12; anioVenc += 1; }
+
+  // Ajuste de día para meses cortos (ej. día 30 en febrero)
+  const ultimoDia = new Date(anioVenc, mesVenc + 1, 0).getDate();
+  const diaFinal = Math.min(diaPago, ultimoDia);
+
+  const mm = String(mesVenc + 1).padStart(2, '0');
+  const dd = String(diaFinal).padStart(2, '0');
+  return `${anioVenc}-${mm}-${dd}`;
+}
+
 // Suma el capital de cuotas TC pendientes que vencen dentro del mes indicado (YYYY-MM)
 function calcularComprometidoMes(mesYYYYMM) {
   if (!estado.cuotasTC) return 0;
