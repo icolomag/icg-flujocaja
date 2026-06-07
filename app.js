@@ -1078,10 +1078,11 @@ function renderMovimientosImagen(movimientos) {
     } else {
       accionesHtml = `
       <div class="movimiento-campos">
-        <select class="correo-select" id="img-prod-${i}">${optsProductos}</select>
+        <select class="correo-select" id="img-prod-${i}" onchange="avisoCuotaTCImagen(${i})">${optsProductos}</select>
         <select class="correo-select" id="img-grupo-${i}" onchange="actualizarSubgruposImagen(${i})">${optsGrupos}</select>
         <select class="correo-select" id="img-sub-${i}"></select>
         <input class="correo-input" id="img-desc-${i}" type="text" value="${m.descripcion}" />
+        <div class="aviso-cuota-tc oculto" id="img-aviso-${i}" style="font-size:0.85em;color:#0a7;margin-top:4px;">ℹ️ Se registrará a 1 cuota. Para diferir, usa +Transacción.</div>
       </div>
       <div class="movimiento-acciones">
         <button class="btn-confirmar" onclick="registrarMovimientoImagen(${i})">✓ Registrar</button>
@@ -1105,7 +1106,10 @@ function renderMovimientosImagen(movimientos) {
 
   // Inicializar subgrupos
   movimientos.forEach((m, i) => {
-    if (!m.existe) actualizarSubgruposImagen(i, m.tipo);
+    if (!m.existe) {
+      actualizarSubgruposImagen(i, m.tipo);
+      avisoCuotaTCImagen(i);
+    }
   });
 
   // Guardar movimientos en estado para acceso posterior
@@ -1119,6 +1123,16 @@ function actualizarSubgruposImagen(i, tipoForzado) {
   const subs = estado.grupos.filter(g => g.grupo === grupo).map(g => g.subgrupo);
   const el = document.getElementById(`img-sub-${i}`);
   if (el) el.innerHTML = subs.map(s => `<option value="${s}">${s}</option>`).join('');
+}
+
+// Muestra un aviso si el producto elegido en un movimiento de imagen es Tarjeta Crédito.
+function avisoCuotaTCImagen(i) {
+  const prodId = document.getElementById(`img-prod-${i}`)?.value;
+  const aviso = document.getElementById(`img-aviso-${i}`);
+  if (!aviso) return;
+  const prod = estado.productos.find(p => p.id === prodId);
+  const esTC = prod && prod.tipo === 'Tarjeta Crédito';
+  aviso.classList.toggle('oculto', !esTC);
 }
 
 async function registrarMovimientoImagen(i) {
@@ -1135,11 +1149,18 @@ async function registrarMovimientoImagen(i) {
   }
 
   mostrarSpinner(true);
-  const r = construirFilaTx({
+  const datosTx = {
     fecha: m.fecha, tipo: m.tipo, grupo, subgrupo,
-    producto, monto: m.monto, descripcion, fuente: 'Imagen', notas: ''
-  });
+    producto, monto: m.monto, descripcion, fuente: 'Imagen', notas: '',
+    numCuotas: 1, primeraCuota: '', conInteres: false
+  };
+  const r = construirFilaTx(datosTx);
   await escribirFila('Transacciones', r.fila);
+  // Si es compra con TC (no pago de TC), generar su cuota corriente
+  const prodSel = estado.productos.find(p => p.id === producto);
+  if (!r.esTraslado && prodSel && prodSel.tipo === 'Tarjeta Crédito') {
+    await generarCuotasTC(r.idTx, datosTx);
+  }
   await cargarDatos();
   mostrarSpinner(false);
   mostrarToast(r.esTraslado ? '✓ Pago de TC registrado' : '✓ Movimiento registrado');
