@@ -2588,6 +2588,10 @@ async function guardarEdicionTx() {
   }
   if (monto <= 0) { mostrarToast('El monto debe ser mayor a cero'); return; }
 
+  const btnGuardar = document.getElementById('btn-edit-tx-guardar');
+  btnGuardar.disabled = true;
+  const textoOriginal = btnGuardar.textContent;
+  btnGuardar.textContent = 'Guardando...';
   mostrarSpinner(true);
   try {
     // Localizar la fila en el Sheet
@@ -2623,6 +2627,9 @@ async function guardarEdicionTx() {
     mostrarSpinner(false);
     mostrarToast('Error al editar: ' + e.message);
     console.error(e);
+  } finally {
+    btnGuardar.disabled = false;
+    btnGuardar.textContent = textoOriginal;
   }
 }
 
