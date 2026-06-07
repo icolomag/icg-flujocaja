@@ -2433,6 +2433,29 @@ function calcularPrimerVencimiento(producto, fechaCompra) {
   return `${anioVenc}-${mm}-${dd}`;
 }
 
+// Devuelve las compras de una TC con cuotas pendientes (diferidas Y de 1 cuota).
+// Agrupa por compra para que el usuario indique manualmente sobre cuál aplica el abono.
+function comprasConCuotasPendientes(productoTC) {
+  if (!estado.cuotasTC) return [];
+  const pendientes = estado.cuotasTC.filter(c =>
+    c.productoTC === productoTC && c.estado === 'Pendiente'
+  );
+  const grupos = {};
+  pendientes.forEach(c => {
+    if (!grupos[c.idCompra]) {
+      grupos[c.idCompra] = {
+        idCompra: c.idCompra, descripcion: c.descripcion,
+        totalCuotas: c.totalCuotas, cuotasPendientes: 0,
+        saldoPendiente: 0, capitalCuota: c.capitalCuota,
+        conInteres: c.conInteres
+      };
+    }
+    grupos[c.idCompra].cuotasPendientes++;
+    grupos[c.idCompra].saldoPendiente += c.capitalCuota;
+  });
+  return Object.values(grupos);
+}
+
 // Suma el capital de cuotas TC pendientes que vencen dentro del mes indicado (YYYY-MM)
 function calcularComprometidoMes(mesYYYYMM) {
   if (!estado.cuotasTC) return 0;
