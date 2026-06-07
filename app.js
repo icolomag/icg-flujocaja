@@ -2303,6 +2303,18 @@ async function borrarNota(indice) {
 }
 
 // ── CÁLCULO DE SALDOS POR PERÍODO ─────────────────────────────────────
+// Anula (no borra) las cuotas asociadas a una transacción, marcándolas como 'Anulada'.
+// Conserva la fila para trazabilidad. Las cuotas anuladas no cuentan en "Vence este mes".
+async function anularCuotasDeTx(idTx) {
+  const filas = await leerHoja('Cuotas_TC!A2:K');
+  for (let i = 0; i < filas.length; i++) {
+    // Columna C (índice 2) = ID_Tx; Columna J (índice 9) = Estado
+    if (filas[i][2] === idTx && filas[i][9] !== 'Anulada') {
+      await actualizarCelda(`Cuotas_TC!J${i + 2}`, 'Anulada');
+    }
+  }
+}
+
 // Genera y escribe las filas de Cuotas_TC para una compra diferida (o de 1 cuota).
 // idTx: ID de la transacción origen. datos: lo leído del formulario + info de cuotas.
 async function generarCuotasTC(idTx, datos) {
@@ -2542,6 +2554,7 @@ async function eliminarTx(txId) {
     if (filaReal === -1) { mostrarToast('No se encontró en el Sheet'); mostrarSpinner(false); return; }
 
     await borrarFila('Transacciones', filaReal);
+    await anularCuotasDeTx(txId);
     await cargarDatos();
     await recalcularSaldos(true);
     mostrarSpinner(false);
