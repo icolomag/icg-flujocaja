@@ -50,6 +50,7 @@
       <button class="nav-btn" data-vista="extracto">📄 Extracto</button>
       <button class="nav-btn" data-vista="transaccion">+ Transacción</button>
       <button class="nav-btn" data-vista="traslado">⇄ Traslado</button>
+      <button class="nav-btn" data-vista="abono-tc">💳 Abono TC</button>
       <button class="nav-btn" data-vista="nomina">💵 Nómina</button>
       <button class="nav-btn" data-vista="historial">Historial</button>
       <button class="nav-btn" data-vista="gmail">📧 Gmail</button>
@@ -225,6 +226,33 @@
             <button id="btn-tr-preview" class="btn-primario">Vista previa</button>
             <button id="btn-tr-guardar" class="btn-confirmar oculto">✓ Confirmar y guardar</button>
             <button id="btn-tr-cancelar" class="btn-secundario oculto">Cancelar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- VISTA: ABONO TC -->
+      <div id="vista-abono-tc" class="vista oculto">
+        <h2>Abono anticipado a Tarjeta de Crédito</h2>
+        <div class="formulario">
+          <div class="campo">
+            <label>Fecha del abono</label>
+            <input type="date" id="abono-fecha" />
+          </div>
+          <div class="campo">
+            <label>Cuenta de origen (de dónde sale el dinero)</label>
+            <select id="abono-origen">
+              <option value="">— Selecciona —</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label>Tarjeta a la que abonas</label>
+            <select id="abono-tc">
+              <option value="">— Selecciona —</option>
+            </select>
+          </div>
+          <div id="abono-compras" class="campo"></div>
+          <div class="campo-accion">
+            <button id="btn-abono-guardar" class="btn-confirmar oculto">✓ Registrar abono</button>
           </div>
         </div>
       </div>
