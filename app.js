@@ -893,6 +893,65 @@ function cambiarVista(vista) {
   if (vista === 'notas') inicializarNotas();
   if (vista === 'extracto') inicializarExtracto();
   if (vista === 'ppto-vista') inicializarPptoVista();
+  if (vista === 'abono-tc') inicializarAbonoTC();
+}
+
+// ── ABONO ANTICIPADO A TC ─────────────────────────────────────────────
+function inicializarAbonoTC() {
+  const selOrigen = document.getElementById('abono-origen');
+  const selTC = document.getElementById('abono-tc');
+  document.getElementById('abono-fecha').value = new Date().toISOString().substring(0, 10);
+
+  // Cuenta de origen: cuentas de ahorro (de donde sale el dinero)
+  selOrigen.innerHTML = '<option value="">— Selecciona —</option>';
+  estado.productos
+    .filter(p => p.tipo === 'Cuenta Ahorros')
+    .forEach(p => { selOrigen.innerHTML += `<option value="${p.id}">${p.nombre}</option>`; });
+
+  // Tarjetas: las de tipo Tarjeta Crédito
+  selTC.innerHTML = '<option value="">— Selecciona —</option>';
+  estado.productos
+    .filter(p => p.tipo === 'Tarjeta Crédito')
+    .forEach(p => { selTC.innerHTML += `<option value="${p.id}">${p.nombre}</option>`; });
+
+  document.getElementById('abono-compras').innerHTML = '';
+  document.getElementById('btn-abono-guardar').classList.add('oculto');
+
+  selTC.onchange = renderComprasAbono;
+}
+
+// Muestra las compras con cuotas pendientes de la TC elegida, con campo para indicar cuántas cuotas abona
+function renderComprasAbono() {
+  const tcId = document.getElementById('abono-tc').value;
+  const cont = document.getElementById('abono-compras');
+  const btnGuardar = document.getElementById('btn-abono-guardar');
+
+  if (!tcId) { cont.innerHTML = ''; btnGuardar.classList.add('oculto'); return; }
+
+  const compras = comprasConCuotasPendientes(tcId);
+  if (compras.length === 0) {
+    cont.innerHTML = '<p style="color:#888">Esta tarjeta no tiene cuotas pendientes registradas.</p>';
+    btnGuardar.classList.add('oculto');
+    return;
+  }
+
+  let html = '<label>Indica cuántas cuotas adelantas de cada compra:</label>';
+  compras.forEach(c => {
+    const desc = c.descripcion || '(sin descripción)';
+    html += `
+      <div class="abono-compra" style="border:1px solid #ddd;border-radius:6px;padding:8px;margin:6px 0;">
+        <div style="font-weight:600">${desc}</div>
+        <div style="font-size:0.85em;color:#666">
+          ${c.cuotasPendientes} cuota(s) pendiente(s) · saldo ${fmt(c.saldoPendiente)} · ${c.conInteres ? 'con interés' : 'sin interés'}
+        </div>
+        <label style="margin-top:6px;font-size:0.9em">Cuotas a abonar (0 = ninguna)</label>
+        <input type="number" class="abono-cuotas-input" data-compra="${c.idCompra}"
+               min="0" max="${c.cuotasPendientes}" value="0"
+               data-capital="${c.capitalCuota}" data-pendientes="${c.cuotasPendientes}">
+      </div>`;
+  });
+  cont.innerHTML = html;
+  btnGuardar.classList.remove('oculto');
 }
 
 // ── FASE 4: INGESTA POR IMAGEN ────────────────────────────────────────
