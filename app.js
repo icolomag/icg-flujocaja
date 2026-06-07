@@ -921,22 +921,7 @@ function inicializarAbonoTC() {
   document.getElementById('btn-abono-guardar').onclick = registrarAbonoTC;
 }
 
-// Muestra las compras con cuotas pendientes de la TC elegida, con campo para indicar cuántas cuotas abona
-function renderComprasAbono() {
-  const tcId = document.getElementById('abono-tc').value;
-  const cont = document.getElementById('abono-compras');
-  const btnGuardar = document.getElementById('btn-abono-guardar');
-
-  if (!tcId) { cont.innerHTML = ''; btnGuardar.classList.add('oculto'); return; }
-
-  const compras = comprasConCuotasPendientes(tcId);
-  if (compras.length === 0) {
-    cont.innerHTML = '<p style="color:#888">Esta tarjeta no tiene cuotas pendientes registradas.</p>';
-    btnGuardar.classList.add('oculto');
-    return;
-  }
-
-  // Registra el abono: marca como Pagada las últimas N cuotas de cada compra indicada,
+// Registra el abono: marca como Pagada las últimas N cuotas de cada compra indicada,
 // y registra el Traslado del dinero (cuenta origen → TC).
 async function registrarAbonoTC() {
   const btn = document.getElementById('btn-abono-guardar');
