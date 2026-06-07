@@ -2602,6 +2602,16 @@ async function guardarEdicionTx() {
     await actualizarRango(`Transacciones!B${filaReal}:I${filaReal}`,
       [[fecha, tipo, grupo, subgrupo, origen, destino, monto, descripcion]]);
 
+    // Regenerar cuotas TC: anular las viejas y crear según el producto nuevo
+    await anularCuotasDeTx(txId);
+    const prodNuevo = estado.productos.find(p => p.id === origen);
+    if (tipo !== 'Traslado' && prodNuevo && prodNuevo.tipo === 'Tarjeta Crédito') {
+      await generarCuotasTC(txId, {
+        fecha, producto: origen, monto, descripcion,
+        numCuotas: 1, primeraCuota: '', conInteres: false
+      });
+    }
+
     await cargarDatos();
     await recalcularSaldos(true);
     mostrarSpinner(false);
