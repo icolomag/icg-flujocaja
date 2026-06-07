@@ -2515,7 +2515,34 @@ function abrirEdicionTx(txId) {
   document.getElementById('btn-edit-tx-guardar').onclick = guardarEdicionTx;
   document.getElementById('btn-edit-tx-cancelar').onclick = cerrarEdicionTx;
 
+  // Avisos de cuotas TC en el modal
+  actualizarAvisosEdicionTC(txId);
+  document.getElementById('edit-tx-origen').onchange = () => actualizarAvisosEdicionTC(txId);
+  document.getElementById('edit-tx-tipo').addEventListener('change', () => actualizarAvisosEdicionTC(txId));
+
   document.getElementById('modal-editar-tx').classList.remove('oculto');
+}
+
+// Muestra avisos y bloquea campos según el estado de las cuotas y el producto elegido.
+function actualizarAvisosEdicionTC(txId) {
+  const avisoTC = document.getElementById('edit-tx-aviso-tc');
+  const bloqueoTC = document.getElementById('edit-tx-bloqueo-tc');
+  const prodId = document.getElementById('edit-tx-origen').value;
+  const prod = estado.productos.find(p => p.id === prodId);
+  const esTC = prod && prod.tipo === 'Tarjeta Crédito';
+  const intocable = tieneCuotasIntocables(txId);
+
+  // Bloqueo: si tiene cuotas pagadas/cerradas, solo se puede editar descripción
+  bloqueoTC.classList.toggle('oculto', !intocable);
+  document.getElementById('edit-tx-monto').disabled = intocable;
+  document.getElementById('edit-tx-fecha').disabled = intocable;
+  document.getElementById('edit-tx-origen').disabled = intocable;
+  document.getElementById('edit-tx-tipo').disabled = intocable;
+  document.getElementById('edit-tx-grupo').disabled = intocable;
+  document.getElementById('edit-tx-subgrupo').disabled = intocable;
+
+  // Aviso de "1 cuota": solo si es TC y no está bloqueada
+  avisoTC.classList.toggle('oculto', !esTC || intocable);
 }
 
 function poblarGruposEdicion(tipo, grupoSel = '', subSel = '') {
