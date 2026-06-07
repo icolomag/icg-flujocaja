@@ -918,6 +918,104 @@ function inicializarAbonoTC() {
   document.getElementById('btn-abono-guardar').classList.add('oculto');
 
   selTC.onchange = renderComprasAbono;
+  document.getElementById('btn-abono-guardar').onclick = registrarAbonoTC;
+}
+
+// Muestra las compras con cuotas pendientes de la TC elegida, con campo para indicar cuántas cuotas abona
+function renderComprasAbono() {
+  const tcId = document.getElementById('abono-tc').value;
+  const cont = document.getElementById('abono-compras');
+  const btnGuardar = document.getElementById('btn-abono-guardar');
+
+  if (!tcId) { cont.innerHTML = ''; btnGuardar.classList.add('oculto'); return; }
+
+  const compras = comprasConCuotasPendientes(tcId);
+  if (compras.length === 0) {
+    cont.innerHTML = '<p style="color:#888">Esta tarjeta no tiene cuotas pendientes registradas.</p>';
+    btnGuardar.classList.add('oculto');
+    return;
+  }
+
+  // Registra el abono: marca como Pagada las últimas N cuotas de cada compra indicada,
+// y registra el Traslado del dinero (cuenta origen → TC).
+async function registrarAbonoTC() {
+  const btn = document.getElementById('btn-abono-guardar');
+  const tcId = document.getElementById('abono-tc').value;
+  const origenId = document.getElementById('abono-origen').value;
+  const fecha = document.getElementById('abono-fecha').value;
+
+  if (!tcId || !origenId || !fecha) {
+    mostrarToast('Completa origen, tarjeta y fecha'); return;
+  }
+  if (esPeriodoCerrado(fecha)) {
+    mostrarToast('No puedes registrar un abono en un mes cerrado'); return;
+  }
+
+  // Recoger qué cuotas abona el usuario por cada compra
+  const inputs = document.querySelectorAll('.abono-cuotas-input');
+  const aPagar = []; // { idCompra, cantidad, capital }
+  let montoTotal = 0;
+  inputs.forEach(inp => {
+    const n = parseInt(inp.value) || 0;
+    if (n > 0) {
+      const capital = parseFloat(inp.dataset.capital) || 0;
+      aPagar.push({ idCompra: inp.dataset.compra, cantidad: n });
+      montoTotal += n * capital;
+    }
+  });
+
+  if (aPagar.length === 0) { mostrarToast('Indica al menos una cuota a abonar'); return; }
+
+  btn.disabled = true;
+  const textoOrig = btn.textContent;
+  btn.textContent = 'Registrando...';
+  mostrarSpinner(true);
+
+  try {
+    // 1. Marcar como Pagada las últimas N cuotas pendientes de cada compra
+    const filas = await leerHoja('Cuotas_TC!A2:K');
+    for (const item of aPagar) {
+      // Buscar las cuotas pendientes de esa compra, ordenadas por número de cuota descendente
+      const cuotasCompra = [];
+      for (let i = 0; i < filas.length; i++) {
+        if (filas[i][1] === item.idCompra && filas[i][9] === 'Pendiente') {
+          cuotasCompra.push({ filaSheet: i + 2, numCuota: parseInt(filas[i][5]) || 0 });
+        }
+      }
+      // Reducir plazo: las más lejanas (número de cuota más alto) primero
+      cuotasCompra.sort((a, b) => b.numCuota - a.numCuota);
+      const aMarcar = cuotasCompra.slice(0, item.cantidad);
+      for (const c of aMarcar) {
+        await actualizarCelda(`Cuotas_TC!J${c.filaSheet}`, 'Pagada');
+      }
+    }
+
+    // 2. Registrar el Traslado del dinero usando el subgrupo de pago vinculado a esa TC
+    const grupoPago = estado.grupos.find(g => g.cuentaDestino === tcId);
+    if (!grupoPago) {
+      mostrarSpinner(false);
+      btn.disabled = false; btn.textContent = textoOrig;
+      mostrarToast('No encontré el subgrupo de pago vinculado a esta tarjeta. Revisa la hoja Grupos.');
+      return;
+    }
+    const idTx = 'TX' + Date.now();
+    await escribirFila('Transacciones', [
+      idTx, fecha, 'Traslado', grupoPago.grupo, grupoPago.subgrupo,
+      origenId, tcId, montoTotal, 'Abono anticipado a TC', 'Manual', 'TRUE', ''
+    ]);
+
+    await cargarDatos();
+    mostrarSpinner(false);
+    mostrarToast(`✓ Abono de ${fmt(montoTotal)} registrado`);
+    cambiarVista('dashboard');
+  } catch (e) {
+    mostrarSpinner(false);
+    mostrarToast('Error al registrar abono: ' + e.message);
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = textoOrig;
+  }
 }
 
 // Muestra las compras con cuotas pendientes de la TC elegida, con campo para indicar cuántas cuotas abona
