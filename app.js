@@ -2620,6 +2620,7 @@ async function eliminarTx(txId) {
   const t = estado.transacciones.find(x => x.id === txId);
   if (!t) return;
   if (t.fecha <= estado.ultimoCierre) { mostrarToast('No puedes eliminar una transacción de un mes cerrado'); return; }
+  if (tieneCuotasIntocables(txId)) { mostrarToast('No puedes eliminar: esta compra ya tiene cuotas pagadas o de un mes cerrado'); return; }
   if (!confirm(`¿Eliminar esta transacción?\n${t.fecha} · ${t.grupo} > ${t.subgrupo} · ${fmt(t.monto)}`)) return;
 
   mostrarSpinner(true);
