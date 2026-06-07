@@ -2343,6 +2343,17 @@ async function borrarNota(indice) {
 }
 
 // ── CÁLCULO DE SALDOS POR PERÍODO ─────────────────────────────────────
+// Revisa si una transacción tiene cuotas pagadas o de períodos cerrados (intocables).
+// Devuelve true si la compra NO se puede editar en monto/producto.
+function tieneCuotasIntocables(idTx) {
+  if (!estado.cuotasTC) return false;
+  return estado.cuotasTC.some(c =>
+    c.idTx === idTx &&
+    c.estado !== 'Anulada' &&
+    (c.estado === 'Pagada' || (c.fechaVencimiento && c.fechaVencimiento <= estado.ultimoCierre))
+  );
+}
+
 // Anula (no borra) las cuotas asociadas a una transacción, marcándolas como 'Anulada'.
 // Conserva la fila para trazabilidad. Las cuotas anuladas no cuentan en "Vence este mes".
 async function anularCuotasDeTx(idTx) {
