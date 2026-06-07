@@ -414,7 +414,7 @@ async function cargarDatos() {
       leerHoja('Presupuesto!A2:F'),
       leerHoja('Contexto!A2:C'),
       leerHoja('Config!A2:B'),
-      leerHoja('Cuotas_TC!A2:K')
+      leerHoja('Cuotas_TC!A2:L')
     ]);
 
     estado.productos = filasProductos.map(f => ({
@@ -450,7 +450,8 @@ async function cargarDatos() {
       descripcion: f[4], numCuota: parseInt(f[5]) || 0,
       totalCuotas: parseInt(f[6]) || 0, capitalCuota: parseFloat(f[7]) || 0,
       fechaVencimiento: f[8] || '', estado: f[9] || 'Pendiente',
-      conInteres: (f[10] || '').toString().toUpperCase() === 'SI'
+      conInteres: (f[10] || '').toString().toUpperCase() === 'SI',
+      idTxPago: f[11] || ''
     }));
 
     estado.config = {};
@@ -957,8 +958,9 @@ async function registrarAbonoTC() {
   mostrarSpinner(true);
 
   try {
+    const idTx = 'TX' + Date.now();
     // 1. Marcar como Pagada las últimas N cuotas pendientes de cada compra
-    const filas = await leerHoja('Cuotas_TC!A2:K');
+    const filas = await leerHoja('Cuotas_TC!A2:L');
     for (const item of aPagar) {
       // Buscar las cuotas pendientes de esa compra, ordenadas por número de cuota descendente
       const cuotasCompra = [];
@@ -972,6 +974,7 @@ async function registrarAbonoTC() {
       const aMarcar = cuotasCompra.slice(0, item.cantidad);
       for (const c of aMarcar) {
         await actualizarCelda(`Cuotas_TC!J${c.filaSheet}`, 'Pagada');
+        await actualizarCelda(`Cuotas_TC!L${c.filaSheet}`, idTx);
       }
     }
 
@@ -983,7 +986,6 @@ async function registrarAbonoTC() {
       mostrarToast('No encontré el subgrupo de pago vinculado a esta tarjeta. Revisa la hoja Grupos.');
       return;
     }
-    const idTx = 'TX' + Date.now();
     await escribirFila('Transacciones', [
       idTx, fecha, 'Traslado', grupoPago.grupo, grupoPago.subgrupo,
       origenId, tcId, montoTotal, 'Abono anticipado a TC', 'Manual', 'TRUE', ''
@@ -2499,7 +2501,7 @@ function tieneCuotasIntocables(idTx) {
 // Anula (no borra) las cuotas asociadas a una transacción, marcándolas como 'Anulada'.
 // Conserva la fila para trazabilidad. Las cuotas anuladas no cuentan en "Vence este mes".
 async function anularCuotasDeTx(idTx) {
-  const filas = await leerHoja('Cuotas_TC!A2:K');
+  const filas = await leerHoja('Cuotas_TC!A2:L');
   for (let i = 0; i < filas.length; i++) {
     // Columna C (índice 2) = ID_Tx; Columna J (índice 9) = Estado
     if (filas[i][2] === idTx && filas[i][9] !== 'Anulada') {
