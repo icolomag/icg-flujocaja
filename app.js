@@ -976,21 +976,21 @@ async function registrarAbonoTC() {
   try {
     const idTx = 'TX' + Date.now();
     // 1. Marcar como Pagada las últimas N cuotas pendientes de cada compra
-    const filas = await leerHoja('Cuotas_TC!A2:L');
+    const filas = await leerHoja('Calendario_Deuda!A2:M');
     for (const item of aPagar) {
       // Buscar las cuotas pendientes de esa compra, ordenadas por número de cuota descendente
       const cuotasCompra = [];
       for (let i = 0; i < filas.length; i++) {
-        if (filas[i][1] === item.idCompra && filas[i][9] === 'Pendiente') {
-          cuotasCompra.push({ filaSheet: i + 2, numCuota: parseInt(filas[i][5]) || 0 });
+        if (filas[i][1] === item.idCompra && filas[i][11] === 'Pendiente') {
+          cuotasCompra.push({ filaSheet: i + 2, numCuota: parseInt(filas[i][6]) || 0 });
         }
       }
       // Reducir plazo: las más lejanas (número de cuota más alto) primero
       cuotasCompra.sort((a, b) => b.numCuota - a.numCuota);
       const aMarcar = cuotasCompra.slice(0, item.cantidad);
       for (const c of aMarcar) {
-        await actualizarCelda(`Cuotas_TC!J${c.filaSheet}`, 'Pagada');
-        await actualizarCelda(`Cuotas_TC!L${c.filaSheet}`, idTx);
+        await actualizarCelda(`Calendario_Deuda!L${c.filaSheet}`, 'Pagada');
+        await actualizarCelda(`Calendario_Deuda!M${c.filaSheet}`, idTx);
       }
     }
 
@@ -2539,14 +2539,14 @@ async function marcarCuotasPagoExtracto(tcId, idTxPago, fechaPago) {
   const finMes = new Date(f.getFullYear(), f.getMonth() + 1, 0);
   const limite = `${finMes.getFullYear()}-${String(finMes.getMonth() + 1).padStart(2, '0')}-${String(finMes.getDate()).padStart(2, '0')}`;
 
-  const filas = await leerHoja('Cuotas_TC!A2:L');
+  const filas = await leerHoja('Calendario_Deuda!A2:M');
   for (let i = 0; i < filas.length; i++) {
-    const esDeEstaTC = filas[i][3] === tcId;        // col D = Producto_TC
-    const estaPendiente = filas[i][9] === 'Pendiente'; // col J = Estado
-    const venc = filas[i][8] || '';                  // col I = Fecha_Vencimiento
+    const esDeEstaTC = filas[i][4] === tcId;          // col E = Producto
+    const estaPendiente = filas[i][11] === 'Pendiente'; // col L = Estado
+    const venc = filas[i][10] || '';                   // col K = Fecha_Vencimiento
     if (esDeEstaTC && estaPendiente && venc && venc <= limite) {
-      await actualizarCelda(`Cuotas_TC!J${i + 2}`, 'Pagada');
-      await actualizarCelda(`Cuotas_TC!L${i + 2}`, idTxPago);
+      await actualizarCelda(`Calendario_Deuda!L${i + 2}`, 'Pagada');
+      await actualizarCelda(`Calendario_Deuda!M${i + 2}`, idTxPago);
     }
   }
 }
@@ -2554,12 +2554,12 @@ async function marcarCuotasPagoExtracto(tcId, idTxPago, fechaPago) {
 // Deshace un abono: devuelve a 'Pendiente' las cuotas que fueron pagadas por ese traslado.
 // Identifica las cuotas por el ID del abono guardado en la columna L (ID_Tx_Pago).
 async function deshacerAbono(idTxAbono) {
-  const filas = await leerHoja('Cuotas_TC!A2:L');
+  const filas = await leerHoja('Calendario_Deuda!A2:M');
   for (let i = 0; i < filas.length; i++) {
-    // Columna L (índice 11) = ID_Tx_Pago; Columna J (índice 9) = Estado
-    if (filas[i][11] === idTxAbono && filas[i][9] === 'Pagada') {
-      await actualizarCelda(`Cuotas_TC!J${i + 2}`, 'Pendiente');
-      await actualizarCelda(`Cuotas_TC!L${i + 2}`, '');
+    // Columna M (índice 12) = ID_Tx_Pago; Columna L (índice 11) = Estado
+    if (filas[i][12] === idTxAbono && filas[i][11] === 'Pagada') {
+      await actualizarCelda(`Calendario_Deuda!L${i + 2}`, 'Pendiente');
+      await actualizarCelda(`Calendario_Deuda!M${i + 2}`, '');
     }
   }
 }
@@ -2567,11 +2567,11 @@ async function deshacerAbono(idTxAbono) {
 // Anula (no borra) las cuotas asociadas a una transacción, marcándolas como 'Anulada'.
 // Conserva la fila para trazabilidad. Las cuotas anuladas no cuentan en "Vence este mes".
 async function anularCuotasDeTx(idTx) {
-  const filas = await leerHoja('Cuotas_TC!A2:L');
+  const filas = await leerHoja('Calendario_Deuda!A2:M');
   for (let i = 0; i < filas.length; i++) {
-    // Columna C (índice 2) = ID_Tx; Columna J (índice 9) = Estado
-    if (filas[i][2] === idTx && filas[i][9] !== 'Anulada') {
-      await actualizarCelda(`Cuotas_TC!J${i + 2}`, 'Anulada');
+    // Columna C (índice 2) = ID_Tx; Columna L (índice 11) = Estado
+    if (filas[i][2] === idTx && filas[i][11] !== 'Anulada') {
+      await actualizarCelda(`Calendario_Deuda!L${i + 2}`, 'Anulada');
     }
   }
 }
@@ -2593,7 +2593,6 @@ async function generarCuotasTC(idTx, datos) {
     return;
   }
 
-  const conInteres = datos.conInteres ? 'SI' : 'NO';
   const base = new Date(primera + 'T00:00:00');
   const diaCuota = base.getDate();
 
@@ -2607,9 +2606,9 @@ async function generarCuotasTC(idTx, datos) {
     const fechaVenc = `${anio}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
 
     const idCuota = `${idCompra}-${String(i + 1).padStart(2, '0')}`;
-    await escribirFila('Cuotas_TC', [
-      idCuota, idCompra, idTx, datos.producto, datos.descripcion,
-      i + 1, totalCuotas, capitalPorCuota, fechaVenc, 'Pendiente', conInteres
+    await escribirFila('Calendario_Deuda', [
+      idCuota, idCompra, idTx, 'TC', datos.producto, datos.descripcion,
+      i + 1, totalCuotas, capitalPorCuota, 0, fechaVenc, 'Pendiente', ''
     ]);
   }
 }
