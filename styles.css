@@ -796,5 +796,105 @@ tr:hover td { background: var(--bg2); }
 .tabla-ppto .fila-saldo td { background: var(--bg2); border-top: 2px solid var(--acento); }
 .tabla-ppto .fila-balance td { border-top: 1px solid var(--acento); }
 
+/* ══ VISTA DE DOS FLUJOS (Tema 7.0) ══ */
+
+.flujos-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.flujo-card {
+  background: var(--fondo2);
+  border-radius: var(--radio);
+  padding: 14px 16px;
+}
+.flujo-card-label {
+  font-size: 13px;
+  color: var(--texto2);
+  margin-bottom: 4px;
+}
+.flujo-card-valor {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.flujos-zoom {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.zoom-btn {
+  font-size: 13px;
+  padding: 6px 14px;
+  border: 1px solid var(--borde);
+  background: var(--fondo);
+  color: var(--texto2);
+  border-radius: var(--radio);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.zoom-btn:hover { background: var(--fondo2); }
+.zoom-btn.activo {
+  background: var(--acento);
+  color: #fff;
+  border-color: var(--acento);
+}
+
+.flujos-tabla {
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  overflow: hidden;
+}
+
+.flujo-bloque-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  font-weight: 600;
+  font-size: 14px;
+}
+.flujo-bloque-header.operativo {
+  background: rgba(79,142,247,0.12);
+  color: var(--acento);
+}
+.flujo-bloque-header.financiero {
+  background: rgba(243,156,18,0.12);
+  color: var(--amarillo);
+  border-top: 1px solid var(--borde);
+}
+.flujo-bloque-header.neto {
+  background: var(--fondo2);
+  border-top: 2px solid var(--borde);
+  font-size: 15px;
+}
+
+.flujo-subtitulo {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--texto2);
+  padding: 8px 16px 4px;
+  background: var(--fondo);
+}
+
+.flujo-fila {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  border-top: 1px solid var(--borde);
+  font-size: 13px;
+}
+.flujo-fila .concepto { color: var(--texto2); }
+.flujo-fila .concepto.sub2 { padding-left: 16px; font-size: 12px; }
+.flujo-fila .num { font-variant-numeric: tabular-nums; }
+.flujo-fila.grupo .concepto { color: var(--texto); }
+.flujo-fila.detalle { background: var(--fondo); }
+
+.flujo-fila .num.verde, .flujo-card-valor.verde { color: var(--verde); }
+.flujo-fila .num.rojo, .flujo-card-valor.rojo { color: var(--rojo); }
+
 Cuando hayas aplicado los tres cambios (app.js completo, nav + vista en index.html, estilos en styles.css), recarga la app en el navegador, vuelve a hacer login y ve a la pestaña Gmail.
 Confírmame qué ves.
