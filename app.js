@@ -2678,28 +2678,51 @@ function comprasConCuotasPendientes(productoTC) {
 // Devuelve el FLUJO OPERATIVO de un mes (YYYY-MM) desde la hoja Presupuesto.
 // Estructura: { ingresos, egresos, neto, grupos: { nombreGrupo: { tipo, subgrupos: {sub: monto}, total } } }
 function calcularFlujoOperativo(mesYYYYMM) {
-  const res = { ingresos: 0, egresos: 0, neto: 0, grupos: {} };
-  if (!estado.presupuesto) return res;
+  const res = { ingresos: 0, egresos: 0, neto: 0,
+                ingresosReal: 0, egresosReal: 0, netoReal: 0, grupos: {} };
 
-  estado.presupuesto.forEach(p => {
-    if (!p.fecha || p.fecha.substring(0, 7) !== mesYYYYMM) return;
-    const tipo = (p.tipo || '').toLowerCase();
-    // Solo lo operativo: ingresos y egresos reales. Lo financiero se calcula aparte.
-    const esIngreso = tipo.includes('ingreso');
-    const esEgreso = tipo.includes('egreso') || tipo.includes('gasto');
-    if (!esIngreso && !esEgreso) return;
+  // 1. Presupuestado (desde hoja Presupuesto)
+  if (estado.presupuesto) {
+    estado.presupuesto.forEach(p => {
+      if (!p.fecha || p.fecha.substring(0, 7) !== mesYYYYMM) return;
+      const tipo = (p.tipo || '').toLowerCase();
+      const esIngreso = tipo.includes('ingreso');
+      const esEgreso = tipo.includes('egreso') || tipo.includes('gasto');
+      if (!esIngreso && !esEgreso) return;
 
-    const grupo = p.grupo || 'Sin grupo';
-    const sub = p.subgrupo || 'Sin subgrupo';
-    if (!res.grupos[grupo]) res.grupos[grupo] = { tipo: esIngreso ? 'ingreso' : 'egreso', subgrupos: {}, total: 0 };
-    res.grupos[grupo].subgrupos[sub] = (res.grupos[grupo].subgrupos[sub] || 0) + p.monto;
-    res.grupos[grupo].total += p.monto;
+      const grupo = p.grupo || 'Sin grupo';
+      const sub = p.subgrupo || 'Sin subgrupo';
+      if (!res.grupos[grupo]) res.grupos[grupo] = { tipo: esIngreso ? 'ingreso' : 'egreso', subgrupos: {}, total: 0, totalReal: 0 };
+      if (!res.grupos[grupo].subgrupos[sub]) res.grupos[grupo].subgrupos[sub] = { ppto: 0, real: 0 };
+      res.grupos[grupo].subgrupos[sub].ppto += p.monto;
+      res.grupos[grupo].total += p.monto;
 
-    if (esIngreso) res.ingresos += p.monto;
-    else res.egresos += p.monto;
-  });
+      if (esIngreso) res.ingresos += p.monto;
+      else res.egresos += p.monto;
+    });
+  }
+
+  // 2. Real (desde Transacciones: solo Ingreso/Egreso, no traslados)
+  if (estado.transacciones) {
+    estado.transacciones.forEach(t => {
+      if (!t.fecha || t.fecha.substring(0, 7) !== mesYYYYMM) return;
+      if (t.tipo !== 'Ingreso' && t.tipo !== 'Egreso') return;
+      const esIngreso = t.tipo === 'Ingreso';
+
+      const grupo = t.grupo || 'Sin grupo';
+      const sub = t.subgrupo || 'Sin subgrupo';
+      if (!res.grupos[grupo]) res.grupos[grupo] = { tipo: esIngreso ? 'ingreso' : 'egreso', subgrupos: {}, total: 0, totalReal: 0 };
+      if (!res.grupos[grupo].subgrupos[sub]) res.grupos[grupo].subgrupos[sub] = { ppto: 0, real: 0 };
+      res.grupos[grupo].subgrupos[sub].real += t.monto;
+      res.grupos[grupo].totalReal += t.monto;
+
+      if (esIngreso) res.ingresosReal += t.monto;
+      else res.egresosReal += t.monto;
+    });
+  }
 
   res.neto = res.ingresos - res.egresos;
+  res.netoReal = res.ingresosReal - res.egresosReal;
   return res;
 }
 
