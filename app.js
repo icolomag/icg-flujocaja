@@ -1834,138 +1834,142 @@ function inicializarPresupuesto() {
   document.getElementById('btn-cargar-ppto').addEventListener('click', cargarComparativo);
 }
 
-async function cargarComparativo() {
+// Nivel de zoom activo de la vista de presupuesto: 'resumen' | 'grupos' | 'subgrupos'
+let nivelPpto = 'grupos';
+
+function cargarComparativo() {
   const mes = document.getElementById('ppto-mes').value;
-  mostrarSpinner(true);
-
-  try {
-    // Leer presupuesto del Sheet para ese mes
-    const filasPpto = await leerHoja('Presupuesto!A2:F');
-    const ppto = filasPpto.filter(f => f[0] && f[0].startsWith(mes));
-
-    // Leer transacciones reales del mes
-    const txsMes = estado.transacciones.filter(t =>
-      t.fecha && t.fecha.startsWith(mes) && (t.tipo === 'Egreso' || t.tipo === 'Ingreso')
-    );
-
-    document.getElementById('ppto-aviso').style.display = ppto.length === 0 ? 'block' : 'none';
-
-    // Construir mapa de real por grupo-subgrupo
-    const realMap = {};
-    txsMes.forEach(t => {
-      const key = `${t.tipo}|${t.grupo}|${t.subgrupo}`;
-      realMap[key] = (realMap[key] || 0) + t.monto;
-    });
-
-    // Construir mapa de presupuesto
-    const pptoMap = {};
-    ppto.forEach(f => {
-      const key = `${f[1]}|${f[2]}|${f[3]}`;
-      pptoMap[key] = (pptoMap[key] || 0) + (parseFloat(f[4]) || 0);
-    });
-
-    // Unir todas las claves
-    const todasClaves = new Set([...Object.keys(realMap), ...Object.keys(pptoMap)]);
-
-    // Agrupar por tipo y grupo
-    const agrupado = {};
-    todasClaves.forEach(key => {
-      const [tipo, grupo, subgrupo] = key.split('|');
-      if (!agrupado[tipo]) agrupado[tipo] = {};
-      if (!agrupado[tipo][grupo]) agrupado[tipo][grupo] = [];
-      agrupado[tipo][grupo].push({
-        subgrupo,
-        real: realMap[key] || 0,
-        ppto: pptoMap[key] || 0
-      });
-    });
-
-    renderComparativo(agrupado, mes);
-
-  } catch(e) {
-    mostrarToast('Error cargando comparativo: ' + e.message);
-    console.error(e);
-  }
-  mostrarSpinner(false);
+  const flujos = calcularFlujosMes(mes);
+  document.getElementById('ppto-aviso').style.display =
+    (flujos.operativo.ingresos === 0 && flujos.operativo.egresos === 0) ? 'block' : 'none';
+  renderFlujos(flujos);
 }
 
-function renderComparativo(agrupado, mes) {
-  const fechaLabel = new Date(mes + '-02').toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
-  let html = `<h3 style="font-size:15px;margin-bottom:16px;color:var(--texto2)">${fechaLabel}</h3>`;
+// Cambia el nivel de zoom y vuelve a pintar
+function cambiarNivelPpto(nivel) {
+  nivelPpto = nivel;
+  cargarComparativo();
+}
 
-  let totalReal = 0;
-  let totalPpto = 0;
+function renderFlujos(flujos) {
+  const fechaLabel = new Date(flujos.mes + '-02').toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+  const op = flujos.operativo;
+  const fin = flujos.financiero;
 
-  ['Egreso', 'Ingreso'].forEach(tipo => {
-    if (!agrupado[tipo]) return;
-    html += `<div style="margin-bottom:24px">
-      <div style="font-size:12px;color:var(--texto2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">
-        ${tipo === 'Egreso' ? '💸 Egresos' : '💰 Ingresos'}
+  // Tarjetas resumen arriba
+  const clsOp = op.neto >= 0 ? 'verde' : 'rojo';
+  const clsFin = fin.neto >= 0 ? 'verde' : 'rojo';
+  const clsNeto = flujos.flujoNeto >= 0 ? 'verde' : 'rojo';
+
+  let html = `
+  <h3 style="font-size:15px;margin-bottom:16px;color:var(--texto2);text-transform:capitalize">${fechaLabel}</h3>
+
+  <div class="flujos-cards">
+    <div class="flujo-card">
+      <div class="flujo-card-label">Flujo operativo</div>
+      <div class="flujo-card-valor ${clsOp}">${fmt(op.neto)}</div>
+    </div>
+    <div class="flujo-card">
+      <div class="flujo-card-label">Flujo financiero</div>
+      <div class="flujo-card-valor ${clsFin}">${fmt(fin.neto)}</div>
+    </div>
+    <div class="flujo-card">
+      <div class="flujo-card-label">Flujo neto del mes</div>
+      <div class="flujo-card-valor ${clsNeto}">${fmt(flujos.flujoNeto)}</div>
+    </div>
+  </div>
+
+  <div class="flujos-zoom">
+    <button class="zoom-btn ${nivelPpto==='resumen'?'activo':''}" onclick="cambiarNivelPpto('resumen')">Resumen</button>
+    <button class="zoom-btn ${nivelPpto==='grupos'?'activo':''}" onclick="cambiarNivelPpto('grupos')">Grupos</button>
+    <button class="zoom-btn ${nivelPpto==='subgrupos'?'activo':''}" onclick="cambiarNivelPpto('subgrupos')">Subgrupos</button>
+  </div>
+
+  <div class="flujos-tabla">`;
+
+  // ── BLOQUE OPERATIVO ──
+  html += `<div class="flujo-bloque-header operativo">
+    <div>Flujo operativo</div>
+    <div class="num">${fmt(op.neto)}</div>
+  </div>`;
+
+  if (nivelPpto !== 'resumen') {
+    // Ingresos y egresos, separados
+    const gruposIng = Object.entries(op.grupos).filter(([,g]) => g.tipo === 'ingreso');
+    const gruposEgr = Object.entries(op.grupos).filter(([,g]) => g.tipo === 'egreso');
+
+    if (gruposIng.length) {
+      html += `<div class="flujo-subtitulo">Ingresos</div>`;
+      gruposIng.forEach(([nombre, g]) => { html += renderGrupoFlujo(nombre, g); });
+    }
+    if (gruposEgr.length) {
+      html += `<div class="flujo-subtitulo">Egresos</div>`;
+      gruposEgr.forEach(([nombre, g]) => { html += renderGrupoFlujo(nombre, g); });
+    }
+  }
+
+  // ── BLOQUE FINANCIERO ──
+  html += `<div class="flujo-bloque-header financiero">
+    <div>Flujo financiero</div>
+    <div class="num">${fmt(fin.neto)}</div>
+  </div>`;
+
+  if (nivelPpto !== 'resumen') {
+    html += renderLineaFin('Nuevos créditos', fin.nuevosCreditos, 'entra');
+    html += renderLineaFin('Abonos a capital', -fin.abonoCapital, 'sale');
+    html += renderLineaFin('Costo financiero', -fin.costoFinanciero, 'sale');
+
+    if (nivelPpto === 'subgrupos') {
+      // Detalle TC vs Crédito dentro del financiero
+      html += `<div class="flujo-fila detalle">
+        <div class="concepto sub2">· Tarjetas de crédito (capital)</div>
+        <div class="num">${fmt(-fin.detalle.TC.capital)}</div>
       </div>`;
-
-    html += `<div class="ppto-fila header">
-      <div>Categoría</div>
-      <div>Presupuesto</div>
-      <div>Real</div>
-      <div>Desviación</div>
-      <div>%</div>
-    </div>`;
-
-    let subtotalReal = 0;
-    let subtotalPpto = 0;
-
-    Object.entries(agrupado[tipo]).forEach(([grupo, items]) => {
-      const grupoReal = items.reduce((s, i) => s + i.real, 0);
-      const grupoPpto = items.reduce((s, i) => s + i.ppto, 0);
-      subtotalReal += grupoReal;
-      subtotalPpto += grupoPpto;
-
-      html += `<div class="ppto-fila grupo-header">
-        <div>${grupo}</div>
-        <div>${grupoPpto > 0 ? fmt(grupoPpto) : '—'}</div>
-        <div>${grupoReal > 0 ? fmt(grupoReal) : '—'}</div>
-        <div>${renderDesviacion(grupoReal, grupoPpto, tipo)}</div>
-        <div>${renderPct(grupoReal, grupoPpto, tipo)}</div>
+      html += `<div class="flujo-fila detalle">
+        <div class="concepto sub2">· Créditos (capital)</div>
+        <div class="num">${fmt(-fin.detalle.Credito.capital)}</div>
       </div>`;
+    }
+  }
 
-      items.forEach(item => {
-        html += `<div class="ppto-fila">
-          <div style="padding-left:16px;color:var(--texto2)">${item.subgrupo}</div>
-          <div>${item.ppto > 0 ? fmt(item.ppto) : '—'}</div>
-          <div>${item.real > 0 ? fmt(item.real) : '—'}</div>
-          <div>${renderDesviacion(item.real, item.ppto, tipo)}</div>
-          <div>${renderPct(item.real, item.ppto, tipo)}</div>
-        </div>`;
-      });
-    });
+  // ── FLUJO NETO ──
+  html += `<div class="flujo-bloque-header neto">
+    <div>Flujo neto del mes</div>
+    <div class="num ${clsNeto}">${fmt(flujos.flujoNeto)}</div>
+  </div>`;
 
-    totalReal += subtotalReal;
-    totalPpto += subtotalPpto;
-
-    html += `<div class="ppto-fila total-row">
-      <div>SUBTOTAL ${tipo.toUpperCase()}S</div>
-      <div>${fmt(subtotalPpto)}</div>
-      <div>${fmt(subtotalReal)}</div>
-      <div>${renderDesviacion(subtotalReal, subtotalPpto, tipo)}</div>
-      <div>${renderPct(subtotalReal, subtotalPpto, tipo)}</div>
-    </div></div>`;
-  });
-
-  // Balance del mes
-  const balanceReal = (agrupado['Ingreso'] ? Object.values(agrupado['Ingreso']).flat().reduce((s, i) => s + i.real, 0) : 0) -
-                      (agrupado['Egreso'] ? Object.values(agrupado['Egreso']).flat().reduce((s, i) => s + i.real, 0) : 0);
-  const balancePpto = (agrupado['Ingreso'] ? Object.values(agrupado['Ingreso']).flat().reduce((s, i) => s + i.ppto, 0) : 0) -
-                      (agrupado['Egreso'] ? Object.values(agrupado['Egreso']).flat().reduce((s, i) => s + i.ppto, 0) : 0);
-
-  html += `<div class="ppto-fila total-row" style="border-top:2px solid var(--acento);margin-top:8px">
-    <div>BALANCE DEL MES</div>
-    <div class="${balancePpto >= 0 ? 'verde' : 'rojo'}">${fmt(balancePpto)}</div>
-    <div class="${balanceReal >= 0 ? 'verde' : 'rojo'}">${fmt(balanceReal)}</div>
-    <div></div>
-    <div></div>
+  html += `</div>
+  <div style="margin-top:10px;font-size:12px;color:var(--texto2)">
+    Mostrando solo lo presupuestado. La columna de ejecutado (Real) y desviaciones se agregan en el siguiente paso.
   </div>`;
 
   document.getElementById('ppto-resultado').innerHTML = html;
+}
+
+// Pinta un grupo operativo y, si el zoom es subgrupos, sus subgrupos
+function renderGrupoFlujo(nombre, g) {
+  let h = `<div class="flujo-fila grupo">
+    <div class="concepto">${nombre}</div>
+    <div class="num">${fmt(g.total)}</div>
+  </div>`;
+  if (nivelPpto === 'subgrupos') {
+    Object.entries(g.subgrupos).forEach(([sub, monto]) => {
+      h += `<div class="flujo-fila detalle">
+        <div class="concepto sub2">${sub}</div>
+        <div class="num">${fmt(monto)}</div>
+      </div>`;
+    });
+  }
+  return h;
+}
+
+// Pinta una línea del bloque financiero (verde si entra caja, normal si sale)
+function renderLineaFin(label, monto, dir) {
+  const cls = dir === 'entra' ? 'verde' : '';
+  return `<div class="flujo-fila grupo">
+    <div class="concepto">${label}</div>
+    <div class="num ${cls}">${fmt(monto)}</div>
+  </div>`;
 }
 
 function renderDesviacion(real, ppto, tipo) {
