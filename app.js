@@ -416,7 +416,7 @@ async function cargarDatos() {
   try {
     const [filasProductos, filasGrupos, filasTx, filasPpto, filasContexto, filasConfig, filasCuotas] = await Promise.all([
       leerHoja('Productos!A2:O'),
-      leerHoja('Grupos!A2:D'),
+      leerHoja('Grupos!A2:E'),
       leerHoja('Transacciones!A2:L'),
       leerHoja('Presupuesto!A2:F'),
       leerHoja('Contexto!A2:C'),
@@ -436,7 +436,7 @@ async function cargarDatos() {
       saldoCierre: parseFloat(f[14]) || 0
     }));
 
-    estado.grupos = filasGrupos.map(f => ({ tipo: f[0], grupo: f[1], subgrupo: f[2], cuentaDestino: f[3] || '' }));
+    estado.grupos = filasGrupos.map(f => ({ tipo: f[0], grupo: f[1], subgrupo: f[2], cuentaDestino: f[3] || '', esCostoFinanciero: (f[4] || '').toString().toUpperCase() === 'SI' }));
     estado.transacciones = filasTx.map(f => ({
       id: f[0], fecha: f[1], tipo: f[2], grupo: f[3], subgrupo: f[4],
       origen: f[5], destino: f[6], monto: parseFloat(f[7]) || 0,
@@ -2755,27 +2755,60 @@ function calcularFlujoFinanciero(mesYYYYMM) {
     abonoCapital: 0,
     costoFinanciero: 0,
     neto: 0,
-    detalle: { TC: { capital: 0, interes: 0 }, Credito: { capital: 0, interes: 0 } }
+    detalle: { TC: { capital: 0, interes: 0 }, Credito: { capital: 0, interes: 0 } },
+    // Real (ejecutado desde Transacciones)
+    abonoCapitalReal: 0,
+    costoFinancieroReal: 0,
+    nuevosCreditosReal: 0,
+    netoReal: 0
   };
-  if (!estado.cuotasTC) return res;
 
-  estado.cuotasTC.forEach(c => {
-    if (c.estado !== 'Pendiente' || !c.fechaVencimiento) return;
-    if (c.fechaVencimiento.substring(0, 7) !== mesYYYYMM) return;
+  // 1. PROYECTADO: lo que vence este mes según Calendario_Deuda
+  if (estado.cuotasTC) {
+    estado.cuotasTC.forEach(c => {
+      if (c.estado !== 'Pendiente' || !c.fechaVencimiento) return;
+      if (c.fechaVencimiento.substring(0, 7) !== mesYYYYMM) return;
 
-    const capital = c.capitalCuota || 0;
-    const interes = c.interesCuota || 0;
-    res.abonoCapital += capital;
-    res.costoFinanciero += interes;
+      const capital = c.capitalCuota || 0;
+      const interes = c.interesCuota || 0;
+      res.abonoCapital += capital;
+      res.costoFinanciero += interes;
 
-    const tipo = (c.tipoOrigen || 'TC') === 'Crédito' ? 'Credito' : 'TC';
-    res.detalle[tipo].capital += capital;
-    res.detalle[tipo].interes += interes;
-  });
-
-  // Neto financiero = lo que SALE de caja (abono + costo), menos lo que ENTRA (nuevos créditos).
-  // Los nuevos créditos se sumarán cuando registremos desembolsos; por ahora 0.
+      const tipo = (c.tipoOrigen || 'TC') === 'Crédito' ? 'Credito' : 'TC';
+      res.detalle[tipo].capital += capital;
+      res.detalle[tipo].interes += interes;
+    });
+  }
   res.neto = res.nuevosCreditos - res.abonoCapital - res.costoFinanciero;
+
+  // 2. REAL: lo ejecutado este mes desde Transacciones
+  if (estado.transacciones && estado.productos) {
+    // IDs de productos que son deuda (TC o crédito)
+    const idsDeuda = estado.productos
+      .filter(p => {
+        const t = (p.tipo || '').toLowerCase();
+        return t.includes('crédito') || t.includes('credito') ||
+               t.includes('hipotec') || t.includes('libranza') || t.includes('pasivo');
+      })
+      .map(p => p.id);
+
+    estado.transacciones.forEach(t => {
+      if (!t.fecha || t.fecha.substring(0, 7) !== mesYYYYMM) return;
+
+      // Abono a capital real: traslado cuyo destino es un producto de deuda
+      if (t.tipo === 'Traslado' && idsDeuda.includes(t.destino)) {
+        res.abonoCapitalReal += t.monto;
+      }
+
+      // Costo financiero real: transacción con subgrupo marcado Es_Costo_Financiero
+      const g = estado.grupos.find(x => x.grupo === t.grupo && x.subgrupo === t.subgrupo);
+      if (g && g.esCostoFinanciero) {
+        res.costoFinancieroReal += t.monto;
+      }
+    });
+  }
+  res.netoReal = res.nuevosCreditosReal - res.abonoCapitalReal - res.costoFinancieroReal;
+
   return res;
 }
 
@@ -2787,7 +2820,8 @@ function calcularFlujosMes(mesYYYYMM) {
     mes: mesYYYYMM,
     operativo,
     financiero,
-    flujoNeto: operativo.neto + financiero.neto
+    flujoNeto: operativo.neto + financiero.neto,           // proyectado
+    flujoNetoReal: operativo.netoReal + financiero.netoReal // real
   };
 }
 
