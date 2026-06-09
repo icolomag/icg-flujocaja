@@ -1856,10 +1856,12 @@ function renderFlujos(flujos) {
   const op = flujos.operativo;
   const fin = flujos.financiero;
 
-  // Tarjetas resumen arriba
-  const clsOp = op.neto >= 0 ? 'verde' : 'rojo';
+  // Tarjetas resumen arriba.
+  // Operativo y neto van en REAL; financiero va proyectado (su real aún no se calcula).
+  const netoCombinado = op.netoReal + fin.neto;
+  const clsOp = op.netoReal >= 0 ? 'verde' : 'rojo';
   const clsFin = fin.neto >= 0 ? 'verde' : 'rojo';
-  const clsNeto = flujos.flujoNeto >= 0 ? 'verde' : 'rojo';
+  const clsNeto = netoCombinado >= 0 ? 'verde' : 'rojo';
 
   let html = `
   <h3 style="font-size:15px;margin-bottom:16px;color:var(--texto2);text-transform:capitalize">${fechaLabel}</h3>
@@ -1867,15 +1869,18 @@ function renderFlujos(flujos) {
   <div class="flujos-cards">
     <div class="flujo-card">
       <div class="flujo-card-label">Flujo operativo</div>
-      <div class="flujo-card-valor ${clsOp}">${fmt(op.neto)}</div>
+      <div class="flujo-card-valor ${clsOp}">${fmt(op.netoReal)}</div>
+      <div class="flujo-card-tag">Real</div>
     </div>
     <div class="flujo-card">
       <div class="flujo-card-label">Flujo financiero</div>
       <div class="flujo-card-valor ${clsFin}">${fmt(fin.neto)}</div>
+      <div class="flujo-card-tag">Proyectado</div>
     </div>
     <div class="flujo-card">
       <div class="flujo-card-label">Flujo neto del mes</div>
-      <div class="flujo-card-valor ${clsNeto}">${fmt(flujos.flujoNeto)}</div>
+      <div class="flujo-card-valor ${clsNeto}">${fmt(netoCombinado)}</div>
+      <div class="flujo-card-tag">Real + proyectado</div>
     </div>
   </div>
 
@@ -1980,9 +1985,10 @@ function renderGrupoFlujo(nombre, g) {
 // Pinta una línea del bloque financiero (verde si entra caja, normal si sale)
 function renderLineaFin(label, monto, dir) {
   const cls = dir === 'entra' ? 'verde' : '';
+  const valor = monto === 0 ? 0 : monto;  // evita el "-0"
   return `<div class="flujo-fila grupo">
     <div class="concepto">${label}</div>
-    <div class="num ${cls}">${fmt(monto)}</div>
+    <div class="num ${cls}">${fmt(valor)}</div>
   </div>`;
 }
 
