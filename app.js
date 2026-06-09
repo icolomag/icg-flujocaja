@@ -1890,8 +1890,17 @@ function renderFlujos(flujos) {
   // ── BLOQUE OPERATIVO ──
   html += `<div class="flujo-bloque-header operativo">
     <div>Flujo operativo</div>
-    <div class="num">${fmt(op.neto)}</div>
+    <div class="num">${fmt(op.netoReal)}</div>
   </div>`;
+
+  if (nivelPpto !== 'resumen') {
+    html += `<div class="flujo-fila cols-header">
+      <div class="concepto">Concepto</div>
+      <div class="num">Ppto</div>
+      <div class="num">Real</div>
+      <div class="num">Desv.</div>
+    </div>`;
+  }
 
   if (nivelPpto !== 'resumen') {
     // Ingresos y egresos, separados
@@ -1946,17 +1955,22 @@ function renderFlujos(flujos) {
   document.getElementById('ppto-resultado').innerHTML = html;
 }
 
-// Pinta un grupo operativo y, si el zoom es subgrupos, sus subgrupos
+// Pinta un grupo operativo (3 columnas: ppto, real, desv) y sus subgrupos si el zoom lo pide
 function renderGrupoFlujo(nombre, g) {
-  let h = `<div class="flujo-fila grupo">
+  const tipoTx = g.tipo === 'ingreso' ? 'Ingreso' : 'Egreso';
+  let h = `<div class="flujo-fila grupo tres-col">
     <div class="concepto">${nombre}</div>
-    <div class="num">${fmt(g.total)}</div>
+    <div class="num">${g.total ? fmt(g.total) : '—'}</div>
+    <div class="num">${g.totalReal ? fmt(g.totalReal) : '—'}</div>
+    <div class="num">${renderDesviacion(g.totalReal, g.total, tipoTx)}</div>
   </div>`;
   if (nivelPpto === 'subgrupos') {
-    Object.entries(g.subgrupos).forEach(([sub, monto]) => {
-      h += `<div class="flujo-fila detalle">
+    Object.entries(g.subgrupos).forEach(([sub, v]) => {
+      h += `<div class="flujo-fila detalle tres-col">
         <div class="concepto sub2">${sub}</div>
-        <div class="num">${fmt(monto)}</div>
+        <div class="num">${v.ppto ? fmt(v.ppto) : '—'}</div>
+        <div class="num">${v.real ? fmt(v.real) : '—'}</div>
+        <div class="num">${renderDesviacion(v.real, v.ppto, tipoTx)}</div>
       </div>`;
     });
   }
