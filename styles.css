@@ -896,5 +896,24 @@ tr:hover td { background: var(--bg2); }
 .flujo-fila .num.verde, .flujo-card-valor.verde { color: var(--verde); }
 .flujo-fila .num.rojo, .flujo-card-valor.rojo { color: var(--rojo); }
 
+/* Filas de 4 columnas (operativo con Ppto/Real/Desv) */
+.flujo-fila.tres-col {
+  display: grid;
+  grid-template-columns: 1fr 110px 110px 100px;
+  gap: 8px;
+}
+.flujo-fila.tres-col .num { text-align: right; }
+.flujo-fila.cols-header {
+  display: grid;
+  grid-template-columns: 1fr 110px 110px 100px;
+  gap: 8px;
+  background: var(--fondo);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--texto2);
+}
+.flujo-fila.cols-header .num { text-align: right; }
+
 Cuando hayas aplicado los tres cambios (app.js completo, nav + vista en index.html, estilos en styles.css), recarga la app en el navegador, vuelve a hacer login y ve a la pestaña Gmail.
 Confírmame qué ves.
