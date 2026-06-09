@@ -915,5 +915,13 @@ tr:hover td { background: var(--bg2); }
 }
 .flujo-fila.cols-header .num { text-align: right; }
 
+.flujo-card-tag {
+  font-size: 11px;
+  color: var(--texto2);
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 Cuando hayas aplicado los tres cambios (app.js completo, nav + vista en index.html, estilos en styles.css), recarga la app en el navegador, vuelve a hacer login y ve a la pestaña Gmail.
 Confírmame qué ves.
