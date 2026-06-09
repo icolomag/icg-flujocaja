@@ -2665,6 +2665,85 @@ function comprasConCuotasPendientes(productoTC) {
   return Object.values(grupos);
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// MOTOR DE LOS DOS FLUJOS (Tema 7.0) — operativo + financiero
+// Pura lógica de cálculo; no toca la pantalla. Una sola fuente de verdad:
+// operativo desde estado.presupuesto, financiero desde estado.cuotasTC.
+// ══════════════════════════════════════════════════════════════════════
+
+// Devuelve el FLUJO OPERATIVO de un mes (YYYY-MM) desde la hoja Presupuesto.
+// Estructura: { ingresos, egresos, neto, grupos: { nombreGrupo: { tipo, subgrupos: {sub: monto}, total } } }
+function calcularFlujoOperativo(mesYYYYMM) {
+  const res = { ingresos: 0, egresos: 0, neto: 0, grupos: {} };
+  if (!estado.presupuesto) return res;
+
+  estado.presupuesto.forEach(p => {
+    if (!p.fecha || p.fecha.substring(0, 7) !== mesYYYYMM) return;
+    const tipo = (p.tipo || '').toLowerCase();
+    // Solo lo operativo: ingresos y egresos reales. Lo financiero se calcula aparte.
+    const esIngreso = tipo.includes('ingreso');
+    const esEgreso = tipo.includes('egreso') || tipo.includes('gasto');
+    if (!esIngreso && !esEgreso) return;
+
+    const grupo = p.grupo || 'Sin grupo';
+    const sub = p.subgrupo || 'Sin subgrupo';
+    if (!res.grupos[grupo]) res.grupos[grupo] = { tipo: esIngreso ? 'ingreso' : 'egreso', subgrupos: {}, total: 0 };
+    res.grupos[grupo].subgrupos[sub] = (res.grupos[grupo].subgrupos[sub] || 0) + p.monto;
+    res.grupos[grupo].total += p.monto;
+
+    if (esIngreso) res.ingresos += p.monto;
+    else res.egresos += p.monto;
+  });
+
+  res.neto = res.ingresos - res.egresos;
+  return res;
+}
+
+// Devuelve el FLUJO FINANCIERO de un mes (YYYY-MM) desde Calendario_Deuda.
+// Tres bloques: nuevosCreditos (entra caja), abonoCapital (sale caja, no es gasto),
+// costoFinanciero (intereses, sí es gasto). El neto financiero es lo que sale de caja.
+function calcularFlujoFinanciero(mesYYYYMM) {
+  const res = {
+    nuevosCreditos: 0,
+    abonoCapital: 0,
+    costoFinanciero: 0,
+    neto: 0,
+    detalle: { TC: { capital: 0, interes: 0 }, Credito: { capital: 0, interes: 0 } }
+  };
+  if (!estado.cuotasTC) return res;
+
+  estado.cuotasTC.forEach(c => {
+    if (c.estado !== 'Pendiente' || !c.fechaVencimiento) return;
+    if (c.fechaVencimiento.substring(0, 7) !== mesYYYYMM) return;
+
+    const capital = c.capitalCuota || 0;
+    const interes = c.interesCuota || 0;
+    res.abonoCapital += capital;
+    res.costoFinanciero += interes;
+
+    const tipo = (c.tipoOrigen || 'TC') === 'Crédito' ? 'Credito' : 'TC';
+    res.detalle[tipo].capital += capital;
+    res.detalle[tipo].interes += interes;
+  });
+
+  // Neto financiero = lo que SALE de caja (abono + costo), menos lo que ENTRA (nuevos créditos).
+  // Los nuevos créditos se sumarán cuando registremos desembolsos; por ahora 0.
+  res.neto = res.nuevosCreditos - res.abonoCapital - res.costoFinanciero;
+  return res;
+}
+
+// Une los dos flujos de un mes en una sola foto.
+function calcularFlujosMes(mesYYYYMM) {
+  const operativo = calcularFlujoOperativo(mesYYYYMM);
+  const financiero = calcularFlujoFinanciero(mesYYYYMM);
+  return {
+    mes: mesYYYYMM,
+    operativo,
+    financiero,
+    flujoNeto: operativo.neto + financiero.neto
+  };
+}
+
 // Devuelve un objeto { 'YYYY-MM': capitalQueVence, ... } con el capital de cuotas TC
 // pendientes que vence en cada uno de los próximos 'numMeses' a partir de hoy.
 // Es la "ola": cuánto desembolso de TC cae cada mes.
