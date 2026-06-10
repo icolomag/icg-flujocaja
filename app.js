@@ -1922,39 +1922,35 @@ function renderFlujos(flujos) {
     }
   }
 
-  // ── BLOQUE FINANCIERO ──
+  // ── BLOQUE FINANCIERO ── (informativo: Proyectado vs Real)
   html += `<div class="flujo-bloque-header financiero">
     <div>Flujo financiero</div>
-    <div class="num">${fmt(fin.neto)}</div>
+    <div class="num">${fmt(fin.netoReal)}</div>
   </div>`;
 
   if (nivelPpto !== 'resumen') {
-    html += renderLineaFin('Nuevos créditos', fin.nuevosCreditos, 'entra');
-    html += renderLineaFin('Abonos a capital', -fin.abonoCapital, 'sale');
-    html += renderLineaFin('Costo financiero', -fin.costoFinanciero, 'sale');
+    // Cabecera de columnas del financiero
+    html += `<div class="flujo-fila cols-header">
+      <div class="concepto">Concepto</div>
+      <div class="num">Proyect.</div>
+      <div class="num">Real</div>
+      <div class="num"></div>
+    </div>`;
 
-    if (nivelPpto === 'subgrupos') {
-      // Detalle TC vs Crédito dentro del financiero
-      html += `<div class="flujo-fila detalle">
-        <div class="concepto sub2">· Tarjetas de crédito (capital)</div>
-        <div class="num">${fmt(-fin.detalle.TC.capital)}</div>
-      </div>`;
-      html += `<div class="flujo-fila detalle">
-        <div class="concepto sub2">· Créditos (capital)</div>
-        <div class="num">${fmt(-fin.detalle.Credito.capital)}</div>
-      </div>`;
-    }
+    html += renderLineaFin('Nuevos créditos', fin.nuevosCreditos, fin.nuevosCreditosReal, 'entra');
+    html += renderLineaFin('Abonos a capital', -fin.abonoCapital, -fin.abonoCapitalReal, 'sale');
+    html += renderLineaFin('Costo financiero', -fin.costoFinanciero, -fin.costoFinancieroReal, 'sale');
   }
 
-  // ── FLUJO NETO ──
+  // ── FLUJO NETO ── (en real, coherente con la tarjeta de arriba)
   html += `<div class="flujo-bloque-header neto">
     <div>Flujo neto del mes</div>
-    <div class="num ${clsNeto}">${fmt(flujos.flujoNeto)}</div>
+    <div class="num ${clsNeto}">${fmt(netoCombinado)}</div>
   </div>`;
 
   html += `</div>
   <div style="margin-top:10px;font-size:12px;color:var(--texto2)">
-    Mostrando solo lo presupuestado. La columna de ejecutado (Real) y desviaciones se agregan en el siguiente paso.
+    Operativo y neto en <strong>Real</strong>. Financiero: Proyectado = lo que vence según el calendario de deuda; Real = lo ejecutado este mes.
   </div>`;
 
   document.getElementById('ppto-resultado').innerHTML = html;
@@ -1982,13 +1978,16 @@ function renderGrupoFlujo(nombre, g) {
   return h;
 }
 
-// Pinta una línea del bloque financiero (verde si entra caja, normal si sale)
-function renderLineaFin(label, monto, dir) {
+// Pinta una línea del bloque financiero con columnas Proyectado y Real
+function renderLineaFin(label, proyectado, real, dir) {
   const cls = dir === 'entra' ? 'verde' : '';
-  const valor = monto === 0 ? 0 : monto;  // evita el "-0"
-  return `<div class="flujo-fila grupo">
+  const valP = proyectado === 0 ? 0 : proyectado;
+  const valR = real === 0 ? 0 : real;
+  return `<div class="flujo-fila grupo tres-col">
     <div class="concepto">${label}</div>
-    <div class="num ${cls}">${fmt(valor)}</div>
+    <div class="num ${cls}">${fmt(valP)}</div>
+    <div class="num ${cls}">${fmt(valR)}</div>
+    <div class="num"></div>
   </div>`;
 }
 
