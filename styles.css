@@ -923,5 +923,15 @@ tr:hover td { background: var(--bg2); }
   letter-spacing: 0.5px;
 }
 
+/* Tabla de la ola (5 columnas) */
+.flujo-fila.ola-grid {
+  display: grid;
+  grid-template-columns: 90px 1fr 1fr 1fr 1.1fr;
+  gap: 8px;
+}
+.flujo-fila.ola-grid .num { text-align: right; }
+.flujo-fila.fila-roja { background: rgba(231,76,60,0.10); }
+.flujo-card-valor.amarillo { color: var(--amarillo); }
+
 Cuando hayas aplicado los tres cambios (app.js completo, nav + vista en index.html, estilos en styles.css), recarga la app en el navegador, vuelve a hacer login y ve a la pestaña Gmail.
 Confírmame qué ves.
