@@ -1570,246 +1570,147 @@ let escenarioActivo = 'base';
 let datosProyeccion = null;
 
 function inicializarProyeccion() {
-  document.getElementById('btn-generar-proyeccion').addEventListener('click', generarProyeccion);
-  document.querySelectorAll('.escenario-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.escenario-btn').forEach(b => b.classList.remove('activo'));
-      btn.classList.add('activo');
-      escenarioActivo = btn.dataset.escenario;
-      if (datosProyeccion) renderProyeccion(datosProyeccion);
-    });
-  });
+  document.getElementById('btn-generar-proyeccion').addEventListener('click', renderOlaCaja);
+  renderOlaCaja();
 }
 
-function calcularEgresosMensualesBase() {
-  // Egresos fijos conocidos de pagos recurrentes
-  const fijos = {
-    'Hipoteca AV Villas': 830733,
-    'TC MC Black (capital)': 833333,
-    'Crédito BBVA Libranza': 287432, // quincenal x2
-    'Intereses Préstamo LMGO': 100000,
-    'FondoSura': 210000, // quincenal x2
+function renderOlaCaja() {
+  const proy = calcularProyeccionCaja(12);
+  const meses = proy.meses;
+
+  // Etiquetas de mes cortas (ej. "jun 26")
+  const etiqueta = m => {
+    const d = new Date(m.mes + '-02');
+    return d.toLocaleDateString('es-CO', { month: 'short', year: '2-digit' }).replace('.', '');
   };
 
-  // Calcular promedio de egresos variables de los últimos 3 meses
-  const hoy = new Date();
-  const hace3meses = new Date(hoy.getFullYear(), hoy.getMonth() - 3, 1);
-  const txsRecientes = estado.transacciones.filter(t => {
-    if (t.tipo !== 'Egreso') return false;
-    const fecha = new Date(t.fecha);
-    return fecha >= hace3meses;
-  });
-
-  const egresosPorGrupo = {};
-  txsRecientes.forEach(t => {
-    egresosPorGrupo[t.grupo] = (egresosPorGrupo[t.grupo] || 0) + t.monto;
-  });
-
-  // Promediar por 3 meses
-  const mesesConDatos = Math.max(1, Math.min(3,
-    new Set(txsRecientes.map(t => t.fecha?.substring(0, 7))).size
-  ));
-
-  const variablesPorMes = {};
-  Object.entries(egresosPorGrupo).forEach(([g, v]) => {
-    variablesPorMes[g] = Math.round(v / mesesConDatos);
-  });
-
-  return { fijos, variables: variablesPorMes };
-}
-
-function calcularIngresosMensualesBase() {
-  const hoy = new Date();
-  const hace3meses = new Date(hoy.getFullYear(), hoy.getMonth() - 3, 1);
-  const txsIngresos = estado.transacciones.filter(t => {
-    if (t.tipo !== 'Ingreso') return false;
-    const fecha = new Date(t.fecha);
-    return fecha >= hace3meses;
-  });
-
-  const mesesConDatos = Math.max(1, Math.min(3,
-    new Set(txsIngresos.map(t => t.fecha?.substring(0, 7))).size
-  ));
-
-  const total = txsIngresos.reduce((s, t) => s + t.monto, 0);
-  return Math.round(total / mesesConDatos);
-}
-
-function generarProyeccion() {
-  mostrarSpinner(true);
-
-  const { fijos, variables } = calcularEgresosMensualesBase();
-  const ingresoBase = calcularIngresosMensualesBase();
-
-  // Si no hay suficientes datos, usar valores estimados del perfil
-  const ingresoFinal = ingresoBase > 0 ? ingresoBase : 8000000;
-
-  const totalFijos = Object.values(fijos).reduce((s, v) => s + v, 0);
-  const totalVariables = Object.values(variables).reduce((s, v) => s + v, 0);
-  const egresoBase = totalFijos + totalVariables;
-
-  // Factores por escenario
-  const factores = {
-    optimista:  { ingresos: 1.10, egresos: 0.90 },
-    base:       { ingresos: 1.00, egresos: 1.00 },
-    pesimista:  { ingresos: 0.90, egresos: 1.10 }
-  };
-
-  // Saldo inicial = total disponible actual
-  const saldoInicial = estado.productos
-    .filter(p => p.disponible && p.saldoActual > 0)
-    .reduce((s, p) => s + p.saldoActual, 0);
-
-  const hoy = new Date();
-  const meses = [];
-
-  for (let i = 0; i < 12; i++) {
-    const fecha = new Date(hoy.getFullYear(), hoy.getMonth() + i, 1);
-    const nombreMes = fecha.toLocaleDateString('es-CO', { month: 'short', year: '2-digit' });
-
-    const escenarios = {};
-    ['optimista', 'base', 'pesimista'].forEach(esc => {
-      const f = factores[esc];
-      const ingresos = Math.round(ingresoFinal * f.ingresos);
-      const egresos = Math.round(egresoBase * f.egresos);
-      const balance = ingresos - egresos;
-      escenarios[esc] = { ingresos, egresos, balance };
-    });
-
-    meses.push({ mes: nombreMes, indice: i, escenarios });
-  }
-
-  // Calcular saldos acumulados
-  let saldos = { optimista: saldoInicial, base: saldoInicial, pesimista: saldoInicial };
-  meses.forEach(m => {
-    ['optimista', 'base', 'pesimista'].forEach(esc => {
-      saldos[esc] += m.escenarios[esc].balance;
-      m.escenarios[esc].saldoAcumulado = saldos[esc];
-    });
-  });
-
-  datosProyeccion = {
-    meses,
-    saldoInicial,
-    ingresoBase: ingresoFinal,
-    egresoBase,
-    fijos,
-    variables,
-    mesesConDatos: new Set(estado.transacciones.map(t => t.fecha?.substring(0, 7))).size
-  };
-
-  renderProyeccion(datosProyeccion);
-  mostrarSpinner(false);
-}
-
-function renderProyeccion(datos) {
-  const esc = escenarioActivo;
-  const meses = datos.meses;
-  const ola = calcularOlaTC(12);
-
-  // Resumen final del escenario
-  const balanceFinal = meses[11].escenarios[esc].saldoAcumulado;
-  const balanceMensualProm = Math.round(meses.reduce((s, m) => s + m.escenarios[esc].balance, 0) / 12);
-  const mesesNegativo = meses.filter(m => m.escenarios[esc].balance < 0).length;
-
-  const colorFinal = balanceFinal >= datos.saldoInicial ? 'verde' : 'rojo';
-  const colorBalance = balanceMensualProm >= 0 ? 'verde' : 'rojo';
+  // ── Tarjetas resumen ──
+  const saldoMin = Math.min(...meses.map(m => m.saldoFinal));
+  const mesMin = meses.find(m => m.saldoFinal === saldoMin);
+  const clsMin = saldoMin < 0 ? 'rojo' : (saldoMin < 3000000 ? 'amarillo' : 'verde');
 
   let html = `
-  <div class="resumen-proyeccion">
-    <div class="resumen-card">
-      <div class="label">Saldo inicial</div>
-      <div class="valor">${fmt(datos.saldoInicial)}</div>
+  <div class="flujos-cards">
+    <div class="flujo-card">
+      <div class="flujo-card-label">Saldo de partida</div>
+      <div class="flujo-card-valor">${fmt(proy.saldoPartida)}</div>
+      <div class="flujo-card-tag">Caja disponible hoy</div>
     </div>
-    <div class="resumen-card">
-      <div class="label">Saldo proyectado (mes 12)</div>
-      <div class="valor ${colorFinal}">${fmt(balanceFinal)}</div>
+    <div class="flujo-card">
+      <div class="flujo-card-label">Punto más bajo</div>
+      <div class="flujo-card-valor ${clsMin}">${fmt(saldoMin)}</div>
+      <div class="flujo-card-tag">${etiqueta(mesMin)}</div>
     </div>
-    <div class="resumen-card">
-      <div class="label">Balance mensual promedio</div>
-      <div class="valor ${colorBalance}">${fmt(balanceMensualProm)}</div>
-    </div>
-    <div class="resumen-card">
-      <div class="label">Meses con balance negativo</div>
-      <div class="valor ${mesesNegativo > 0 ? 'rojo' : 'verde'}">${mesesNegativo}</div>
+    <div class="flujo-card">
+      <div class="flujo-card-label">Saldo final proyectado</div>
+      <div class="flujo-card-valor">${fmt(meses[meses.length - 1].saldoFinal)}</div>
+      <div class="flujo-card-tag">${etiqueta(meses[meses.length - 1])}</div>
     </div>
   </div>`;
 
-  // Nota sobre calidad de datos
-  if (datos.mesesConDatos < 3) {
-    html += `<div style="background:rgba(243,156,18,0.1);border:1px solid var(--amarillo);border-radius:var(--radio);padding:12px;margin-bottom:16px;font-size:13px;color:var(--amarillo)">
-      ⚠️ Proyección basada en ${datos.mesesConDatos} mes(es) de datos. La precisión mejora con más historial registrado.
+  // ── Gráfica SVG ──
+  html += dibujarOlaSVG(meses);
+
+  // ── Tabla mes a mes ──
+  html += `<div class="flujos-tabla" style="margin-top:20px">
+    <div class="flujo-fila cols-header ola-grid">
+      <div class="concepto">Mes</div>
+      <div class="num">Operativo</div>
+      <div class="num">Financiero</div>
+      <div class="num">Flujo neto</div>
+      <div class="num">Saldo caja</div>
     </div>`;
-  }
 
-  // Tabla de proyección
-  html += `<div class="proyeccion-tabla"><table>
-    <thead><tr>
-      <th>Mes</th>
-      <th>Ingresos</th>
-      <th>Egresos</th>
-      <th>Vence TC</th>
-      <th>Balance</th>
-      <th>Saldo acumulado</th>
-    </tr></thead>
-    <tbody>`;
-
-  const hoyProy = new Date();
-  meses.forEach((m, idx) => {
-    const d = m.escenarios[esc];
-    const clsBalance = d.balance >= 0 ? 'positivo' : 'negativo';
-    const clsSaldo = d.saldoAcumulado >= datos.saldoInicial ? 'positivo' : 'negativo';
-    const fMes = new Date(hoyProy.getFullYear(), hoyProy.getMonth() + idx, 1);
-    const claveMes = `${fMes.getFullYear()}-${String(fMes.getMonth() + 1).padStart(2, '0')}`;
-    const venceTC = ola[claveMes] || 0;
-    html += `<tr>
-      <td><strong>${m.mes}</strong></td>
-      <td class="positivo">${fmt(d.ingresos)}</td>
-      <td class="negativo">-${fmt(d.egresos)}</td>
-      <td class="${venceTC > 0 ? 'negativo' : ''}">${venceTC > 0 ? fmt(venceTC) : '—'}</td>
-      <td class="${clsBalance}">${d.balance >= 0 ? '+' : ''}${fmt(d.balance)}</td>
-      <td class="${clsSaldo}">${fmt(d.saldoAcumulado)}</td>
-    </tr>`;
-  });
-
-  // Fila de totales
-  const totIngresos = meses.reduce((s, m) => s + m.escenarios[esc].ingresos, 0);
-  const totEgresos = meses.reduce((s, m) => s + m.escenarios[esc].egresos, 0);
-  const totBalance = totIngresos - totEgresos;
-  const totVenceTC = Object.values(ola).reduce((s, v) => s + v, 0);
-  html += `<tr class="fila-total">
-    <td>TOTAL 12M</td>
-    <td>${fmt(totIngresos)}</td>
-    <td>-${fmt(totEgresos)}</td>
-    <td>${totVenceTC > 0 ? fmt(totVenceTC) : '—'}</td>
-    <td>${totBalance >= 0 ? '+' : ''}${fmt(totBalance)}</td>
-    <td>${fmt(meses[11].escenarios[esc].saldoAcumulado)}</td>
-  </tr>`;
-
-  html += `</tbody></table></div>`;
-
-  // Desglose de egresos base
-  html += `<div style="margin-top:24px">
-    <h3 style="font-size:14px;color:var(--texto2);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px">Egresos base mensuales</h3>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:520px">`;
-
-  Object.entries(datos.fijos).forEach(([nombre, valor]) => {
-    html += `<div style="background:var(--bg2);border:1px solid var(--borde);border-radius:var(--radio);padding:10px 14px;font-size:13px">
-      <div style="color:var(--texto2);font-size:11px">${nombre}</div>
-      <div style="font-weight:700">${fmt(valor)}</div>
+  meses.forEach(m => {
+    const clsFila = m.enRojo ? 'fila-roja' : '';
+    const clsNeto = m.flujoNeto >= 0 ? 'verde' : 'rojo';
+    const clsSaldo = m.saldoFinal < 0 ? 'rojo' : '';
+    html += `<div class="flujo-fila ola-grid ${clsFila}">
+      <div class="concepto">${etiqueta(m)}</div>
+      <div class="num">${fmt(m.operativo)}</div>
+      <div class="num">${m.financiero === 0 ? fmt(0) : fmt(m.financiero)}</div>
+      <div class="num ${clsNeto}">${fmt(m.flujoNeto)}</div>
+      <div class="num ${clsSaldo}"><strong>${fmt(m.saldoFinal)}</strong></div>
     </div>`;
   });
 
-  Object.entries(datos.variables).forEach(([grupo, valor]) => {
-    html += `<div style="background:var(--bg2);border:1px solid var(--borde);border-radius:var(--radio);padding:10px 14px;font-size:13px">
-      <div style="color:var(--texto2);font-size:11px">${grupo} (prom.)</div>
-      <div style="font-weight:700">${fmt(valor)}</div>
-    </div>`;
-  });
-
-  html += `</div></div>`;
+  html += `</div>
+  <div style="margin-top:10px;font-size:12px;color:var(--texto2)">
+    Operativo: presupuestado. Financiero: lo que vence según el calendario de deuda (la "ola"). El saldo de caja encadena mes a mes desde tu disponible actual.
+  </div>`;
 
   document.getElementById('proyeccion-resultado').innerHTML = html;
+}
+
+// Dibuja la ola en SVG: línea de saldo de caja + barras de desembolso de deuda
+function dibujarOlaSVG(meses) {
+  const W = 760, H = 260, padL = 70, padR = 20, padT = 20, padB = 40;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+  const n = meses.length;
+
+  const saldos = meses.map(m => m.saldoFinal);
+  const olas = meses.map(m => m.olaDesembolso);
+  const maxSaldo = Math.max(...saldos, 0);
+  const minSaldo = Math.min(...saldos, 0);
+  const maxOla = Math.max(...olas, 1);
+  const rango = (maxSaldo - minSaldo) || 1;
+
+  // Coordenada Y para un valor de saldo
+  const yS = v => padT + innerH - ((v - minSaldo) / rango) * innerH;
+  // X para el índice de mes (centro de cada columna)
+  const stepX = innerW / n;
+  const xC = i => padL + stepX * i + stepX / 2;
+  // Altura de barra de ola
+  const hOla = v => (v / maxOla) * (innerH * 0.5);
+
+  // Línea cero (si hay saldos negativos)
+  const yCero = yS(0);
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;background:var(--fondo2);border-radius:var(--radio)">`;
+
+  // Zona bajo cero (roja tenue) si aplica
+  if (minSaldo < 0) {
+    svg += `<rect x="${padL}" y="${yCero}" width="${innerW}" height="${padT + innerH - yCero}" fill="rgba(231,76,60,0.10)"/>`;
+    svg += `<line x1="${padL}" y1="${yCero}" x2="${W - padR}" y2="${yCero}" stroke="rgba(231,76,60,0.5)" stroke-width="1" stroke-dasharray="4 3"/>`;
+  }
+
+  // Barras de la ola (desembolso de deuda)
+  meses.forEach((m, i) => {
+    if (m.olaDesembolso > 0) {
+      const bh = hOla(m.olaDesembolso);
+      const bx = xC(i) - stepX * 0.28;
+      const bw = stepX * 0.56;
+      const by = padT + innerH - bh;
+      svg += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="2" fill="rgba(243,156,18,0.55)"/>`;
+    }
+  });
+
+  // Línea de saldo de caja
+  let pts = meses.map((m, i) => `${xC(i)},${yS(m.saldoFinal)}`).join(' ');
+  svg += `<polyline points="${pts}" fill="none" stroke="var(--acento)" stroke-width="2.5"/>`;
+
+  // Puntos sobre la línea
+  meses.forEach((m, i) => {
+    const cls = m.saldoFinal < 0 ? 'rgba(231,76,60,1)' : 'var(--acento)';
+    svg += `<circle cx="${xC(i)}" cy="${yS(m.saldoFinal)}" r="3.5" fill="${cls}"/>`;
+  });
+
+  // Etiquetas de mes (eje X)
+  meses.forEach((m, i) => {
+    const d = new Date(m.mes + '-02');
+    const lbl = d.toLocaleDateString('es-CO', { month: 'short' }).replace('.', '');
+    svg += `<text x="${xC(i)}" y="${H - 14}" text-anchor="middle" font-size="10" fill="var(--texto2)">${lbl}</text>`;
+  });
+
+  // Etiquetas de saldo (eje Y): máximo, cero, mínimo
+  const fmtCorto = v => '$' + Math.round(v / 1000000) + 'M';
+  svg += `<text x="${padL - 8}" y="${yS(maxSaldo) + 4}" text-anchor="end" font-size="10" fill="var(--texto2)">${fmtCorto(maxSaldo)}</text>`;
+  if (minSaldo < 0) svg += `<text x="${padL - 8}" y="${yCero + 4}" text-anchor="end" font-size="10" fill="var(--texto2)">$0</text>`;
+  svg += `<text x="${padL - 8}" y="${yS(minSaldo) + 4}" text-anchor="end" font-size="10" fill="var(--texto2)">${fmtCorto(minSaldo)}</text>`;
+
+  svg += `</svg>`;
+  return svg;
 }
 
 // ── FASE 6B: REAL VS PRESUPUESTO ─────────────────────────────────────
