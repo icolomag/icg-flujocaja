@@ -2824,6 +2824,62 @@ function calcularFlujosMes(mesYYYYMM) {
   };
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// MOTOR DE PROYECCIÓN DE CAJA 12 MESES (Tema 7.0, paso 4B) — "la ola"
+// Encadena el saldo de caja mes a mes: saldo inicial + flujo neto de cada mes.
+// Operativo: presupuestado (la proyección usa el plan, no el real).
+// Financiero: proyectado desde Calendario_Deuda (lo que vence).
+// ══════════════════════════════════════════════════════════════════════
+function calcularProyeccionCaja(numMeses = 12) {
+  // 1. Saldo de partida = caja disponible actual (Ahorros + Inversión líquida)
+  const saldoPartida = estado.productos
+    .filter(p => p.disponible && p.saldoActual >= 0)
+    .reduce((s, p) => s + p.saldoActual, 0);
+
+  // 2. Mes de arranque = mes corriente
+  const hoy = new Date();
+  let anio = hoy.getFullYear();
+  let mes = hoy.getMonth(); // 0-11
+
+  const meses = [];
+  let saldoAcumulado = saldoPartida;
+
+  for (let i = 0; i < numMeses; i++) {
+    const mesYYYYMM = `${anio}-${String(mes + 1).padStart(2, '0')}`;
+
+    const operativo = calcularFlujoOperativo(mesYYYYMM);
+    const financiero = calcularFlujoFinanciero(mesYYYYMM);
+
+    // La proyección usa SIEMPRE el presupuestado (plan), también el mes corriente.
+    const flujoOperativo = operativo.neto;          // presupuestado
+    const flujoFinanciero = financiero.neto;        // proyectado (Calendario_Deuda)
+    const flujoNeto = flujoOperativo + flujoFinanciero;
+
+    const saldoInicialMes = saldoAcumulado;
+    saldoAcumulado += flujoNeto;
+
+    // Desembolso total de deuda del mes (capital + interés) = la barra de la ola
+    const olaDesembolso = financiero.abonoCapital + financiero.costoFinanciero;
+
+    meses.push({
+      mes: mesYYYYMM,
+      saldoInicial: saldoInicialMes,
+      operativo: flujoOperativo,
+      financiero: flujoFinanciero,
+      flujoNeto: flujoNeto,
+      saldoFinal: saldoAcumulado,
+      olaDesembolso: olaDesembolso,
+      enRojo: saldoAcumulado < 0
+    });
+
+    // Avanzar al siguiente mes
+    mes++;
+    if (mes > 11) { mes = 0; anio++; }
+  }
+
+  return { saldoPartida, meses };
+}
+
 // Devuelve un objeto { 'YYYY-MM': capitalQueVence, ... } con el capital de cuotas TC
 // pendientes que vence en cada uno de los próximos 'numMeses' a partir de hoy.
 // Es la "ola": cuánto desembolso de TC cae cada mes.
