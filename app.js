@@ -1858,9 +1858,9 @@ function renderFlujos(flujos) {
 
   // Tarjetas resumen arriba.
   // Operativo y neto van en REAL; financiero va proyectado (su real aún no se calcula).
-  const netoCombinado = op.netoReal + fin.neto;
+  const netoCombinado = op.netoReal + fin.netoReal;
   const clsOp = op.netoReal >= 0 ? 'verde' : 'rojo';
-  const clsFin = fin.neto >= 0 ? 'verde' : 'rojo';
+  const clsFin = fin.netoReal >= 0 ? 'verde' : 'rojo';
   const clsNeto = netoCombinado >= 0 ? 'verde' : 'rojo';
 
   let html = `
@@ -1874,13 +1874,13 @@ function renderFlujos(flujos) {
     </div>
     <div class="flujo-card">
       <div class="flujo-card-label">Flujo financiero</div>
-      <div class="flujo-card-valor ${clsFin}">${fmt(fin.neto)}</div>
-      <div class="flujo-card-tag">Proyectado</div>
+      <div class="flujo-card-valor ${clsFin}">${fmt(fin.netoReal)}</div>
+      <div class="flujo-card-tag">Real</div>
     </div>
     <div class="flujo-card">
       <div class="flujo-card-label">Flujo neto del mes</div>
       <div class="flujo-card-valor ${clsNeto}">${fmt(netoCombinado)}</div>
-      <div class="flujo-card-tag">Real + proyectado</div>
+      <div class="flujo-card-tag">Real</div>
     </div>
   </div>
 
