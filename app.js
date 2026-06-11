@@ -327,7 +327,7 @@ function renderCorreosPendientes(correos) {
       <div class="correo-campos">
         <select class="correo-select" id="correo-prod-${c.gmailId}" onchange="avisoCuotaTC('${c.gmailId}')">${optsProductos}</select>
         <select class="correo-select" id="correo-grupo-${c.gmailId}" onchange="actualizarSubgruposCorreo('${c.gmailId}')">${optsGrupos}</select>
-        <select class="correo-select" id="correo-sub-${c.gmailId}"></select>
+        <select class="correo-select" id="correo-sub-${c.gmailId}" onchange="revisarInteresCorreo('${c.gmailId}')"></select>
         <input class="correo-input" id="correo-desc-${c.gmailId}" type="text" placeholder="Descripción" value="${c.asunto.substring(0,50)}" />
         <div class="aviso-cuota-tc oculto" id="correo-aviso-${c.gmailId}" style="font-size:0.85em;color:#0a7;margin-top:4px;">ℹ️ Se registrará a 1 cuota. Para diferir, usa +Transacción.</div>
       </div>
@@ -363,6 +363,23 @@ function actualizarSubgruposCorreo(gmailId, tipoForzado) {
   const subs = estado.grupos.filter(g => g.grupo === grupo).map(g => g.subgrupo);
   const el = document.getElementById(`correo-sub-${gmailId}`);
   if (el) el.innerHTML = subs.map(s => `<option value="${s}">${s}</option>`).join('');
+  revisarInteresCorreo(gmailId);
+}
+
+// Muestra el campo de interés solo si el subgrupo elegido apunta a una deuda
+// (tiene Cuenta_Destino). Así Nacho separa capital/interés en pagos de TC.
+function revisarInteresCorreo(gmailId) {
+  const subgrupo = document.getElementById(`correo-sub-${gmailId}`)?.value;
+  const grupo = document.getElementById(`correo-grupo-${gmailId}`)?.value;
+  const bloque = document.getElementById(`correo-int-bloque-${gmailId}`);
+  if (!bloque) return;
+  const g = estado.grupos.find(x => x.grupo === grupo && x.subgrupo === subgrupo);
+  const esPagoDeuda = g && g.cuentaDestino;
+  bloque.classList.toggle('oculto', !esPagoDeuda);
+  if (!esPagoDeuda) {
+    const inp = document.getElementById(`correo-int-${gmailId}`);
+    if (inp) inp.value = 0;
+  }
 }
 
 async function confirmarCorreo(gmailId) {
@@ -384,18 +401,30 @@ async function confirmarCorreo(gmailId) {
     producto, monto: c.monto, descripcion, fuente: 'Gmail', notas: c.gmailId,
     numCuotas: 1, primeraCuota: '', conInteres: false
   };
-  const r = construirFilaTx(datosTx);
-  await escribirFila('Transacciones', r.fila);
-  // Si es compra con TC (no pago de TC), generar su cuota corriente
-  const prodSel = estado.productos.find(p => p.id === producto);
-  if (!r.esTraslado && prodSel && prodSel.tipo === 'Tarjeta Crédito') {
-    await generarCuotasTC(r.idTx, datosTx);
-  }
-  // Si es pago de TC (traslado a una tarjeta), marcar las cuotas del extracto como pagadas
-  if (r.esTraslado && r.destino) {
-    const prodDestino = estado.productos.find(p => p.id === r.destino);
-    if (prodDestino && prodDestino.tipo === 'Tarjeta Crédito') {
-      await marcarCuotasPagoExtracto(r.destino, r.idTx, m.fecha);
+  // ¿Es pago de deuda? (el subgrupo apunta a una TC/deuda vía Cuenta_Destino)
+  const gSel = estado.grupos.find(x => x.grupo === grupo && x.subgrupo === subgrupo);
+  const esPagoDeuda = gSel && gSel.cuentaDestino;
+  const interes = esPagoDeuda
+    ? (Number(document.getElementById(`correo-int-${gmailId}`)?.value) || 0)
+    : 0;
+
+  let r;
+  if (esPagoDeuda) {
+    // Pago de deuda: partir en capital (traslado) + interés (costo financiero)
+    r = await registrarPagoDeudaPartido(datosTx, interes);
+    if (r.destino) {
+      const prodDestino = estado.productos.find(p => p.id === r.destino);
+      if (prodDestino && prodDestino.tipo === 'Tarjeta Crédito') {
+        await marcarCuotasPagoExtracto(r.destino, r.idTxCapital, c.fecha);
+      }
+    }
+  } else {
+    // Movimiento normal (no es pago de deuda)
+    r = construirFilaTx(datosTx);
+    await escribirFila('Transacciones', r.fila);
+    const prodSel = estado.productos.find(p => p.id === producto);
+    if (!r.esTraslado && prodSel && prodSel.tipo === 'Tarjeta Crédito') {
+      await generarCuotasTC(r.idTx, datosTx);
     }
   }
   await cargarDatos();
@@ -864,6 +893,51 @@ function esPeriodoCerrado(fecha) {
   return fecha <= estado.ultimoCierre;
 }
 
+// ── PAGO DE DEUDA PARTIDO (capital + interés) ─────────────────────────
+// Registra un pago de TC/deuda separando el interés del capital, para no
+// inflar el abono a capital. Crea hasta dos registros, ambos desde la
+// cuenta de ahorros origen:
+//   1) Traslado del CAPITAL (monto - interes) a la tarjeta/deuda.
+//   2) Egreso de COSTO FINANCIERO por el interés (subgrupo "Costo financiero").
+// Si interes <= 0, se comporta como un pago normal (solo el traslado).
+// Devuelve { idTxCapital, idTxInteres, esTraslado, destino } para que el
+// llamador marque cuotas pagadas con el traslado de capital.
+async function registrarPagoDeudaPartido(d, interes) {
+  // d = { fecha, tipo, grupo, subgrupo, producto, monto, descripcion, fuente, notas }
+  const intNum = Number(interes) || 0;
+  const capital = d.monto - intNum;
+
+  // 1) Registro del capital (lo arma construirFilaTx → será Traslado por Cuenta_Destino)
+  const dCapital = { ...d, monto: capital };
+  const rCapital = construirFilaTx(dCapital);
+  await escribirFila('Transacciones', rCapital.fila);
+
+  let idTxInteres = '';
+
+  // 2) Registro del interés como egreso de costo financiero (solo si hay interés)
+  if (intNum > 0) {
+    const gCF = estado.grupos.find(x => x.subgrupo === 'Costo financiero');
+    if (!gCF) {
+      mostrarToast('⚠️ No encontré el subgrupo "Costo financiero" en Grupos. El interés NO se registró.');
+    } else {
+      idTxInteres = 'TX' + (Date.now() + 1); // +1 para no chocar con el id del capital
+      const filaInteres = [
+        idTxInteres, d.fecha, 'Egreso', gCF.grupo, 'Costo financiero',
+        d.producto, '', intNum,
+        'Interés ' + (d.descripcion || ''), d.fuente, 'TRUE', d.notas || ''
+      ];
+      await escribirFila('Transacciones', filaInteres);
+    }
+  }
+
+  return {
+    idTxCapital: rCapital.idTx,
+    idTxInteres,
+    esTraslado: rCapital.esTraslado,
+    destino: rCapital.destino
+  };
+}
+
 // ── PAGOS DE TC COMO TRASLADO ─────────────────────────────────────────
 // Dado el grupo+subgrupo de un movimiento, decide si es un pago de TC.
 // Si lo es, devuelve los datos como Traslado (cuenta origen → TC destino).
@@ -1274,9 +1348,17 @@ function renderMovimientosImagen(movimientos) {
       <div class="movimiento-campos">
         <select class="correo-select" id="img-prod-${i}" onchange="avisoCuotaTCImagen(${i})">${optsProductos}</select>
         <select class="correo-select" id="img-grupo-${i}" onchange="actualizarSubgruposImagen(${i})">${optsGrupos}</select>
-        <select class="correo-select" id="img-sub-${i}"></select>
+        <select class="correo-select" id="img-sub-${i}" onchange="revisarInteresImagen(${i})"></select>
         <input class="correo-input" id="img-desc-${i}" type="text" value="${m.descripcion}" />
         <div class="aviso-cuota-tc oculto" id="img-aviso-${i}" style="font-size:0.85em;color:#0a7;margin-top:4px;">ℹ️ Se registrará a 1 cuota. Para diferir, usa +Transacción.</div>
+        <div class="campo-interes-deuda oculto" id="img-int-bloque-${i}" style="margin-top:6px;">
+          <label style="font-size:0.85em;color:var(--texto2)">Interés incluido en el pago (si aplica):</label>
+          <input class="correo-input" id="img-int-${i}" type="number" min="0" value="0" placeholder="0" />
+        </div>
+        <div class="campo-interes-deuda oculto" id="correo-int-bloque-${c.gmailId}" style="margin-top:6px;">
+          <label style="font-size:0.85em;color:var(--texto2)">Interés incluido en el pago (si aplica):</label>
+          <input class="correo-input" id="correo-int-${c.gmailId}" type="number" min="0" value="0" placeholder="0" />
+        </div>
       </div>
       <div class="movimiento-acciones">
         <button class="btn-confirmar" onclick="registrarMovimientoImagen(${i})">✓ Registrar</button>
@@ -1317,6 +1399,22 @@ function actualizarSubgruposImagen(i, tipoForzado) {
   const subs = estado.grupos.filter(g => g.grupo === grupo).map(g => g.subgrupo);
   const el = document.getElementById(`img-sub-${i}`);
   if (el) el.innerHTML = subs.map(s => `<option value="${s}">${s}</option>`).join('');
+  revisarInteresImagen(i);
+}
+
+// Muestra el campo de interés solo si el subgrupo elegido apunta a una deuda.
+function revisarInteresImagen(i) {
+  const subgrupo = document.getElementById(`img-sub-${i}`)?.value;
+  const grupo = document.getElementById(`img-grupo-${i}`)?.value;
+  const bloque = document.getElementById(`img-int-bloque-${i}`);
+  if (!bloque) return;
+  const g = estado.grupos.find(x => x.grupo === grupo && x.subgrupo === subgrupo);
+  const esPagoDeuda = g && g.cuentaDestino;
+  bloque.classList.toggle('oculto', !esPagoDeuda);
+  if (!esPagoDeuda) {
+    const inp = document.getElementById(`img-int-${i}`);
+    if (inp) inp.value = 0;
+  }
 }
 
 // Muestra un aviso si el producto elegido en un movimiento de imagen es Tarjeta Crédito.
@@ -1348,18 +1446,30 @@ async function registrarMovimientoImagen(i) {
     producto, monto: m.monto, descripcion, fuente: 'Imagen', notas: '',
     numCuotas: 1, primeraCuota: '', conInteres: false
   };
-  const r = construirFilaTx(datosTx);
-  await escribirFila('Transacciones', r.fila);
-  // Si es compra con TC (no pago de TC), generar su cuota corriente
-  const prodSel = estado.productos.find(p => p.id === producto);
-  if (!r.esTraslado && prodSel && prodSel.tipo === 'Tarjeta Crédito') {
-    await generarCuotasTC(r.idTx, datosTx);
-  }
-  // Si es pago de TC (traslado a una tarjeta), marcar las cuotas del extracto como pagadas
-  if (r.esTraslado && r.destino) {
-    const prodDestino = estado.productos.find(p => p.id === r.destino);
-    if (prodDestino && prodDestino.tipo === 'Tarjeta Crédito') {
-      await marcarCuotasPagoExtracto(r.destino, r.idTx, c.fecha);
+  // ¿Es pago de deuda? (el subgrupo apunta a una TC/deuda vía Cuenta_Destino)
+  const gSel = estado.grupos.find(x => x.grupo === grupo && x.subgrupo === subgrupo);
+  const esPagoDeuda = gSel && gSel.cuentaDestino;
+  const interes = esPagoDeuda
+    ? (Number(document.getElementById(`img-int-${i}`)?.value) || 0)
+    : 0;
+
+  let r;
+  if (esPagoDeuda) {
+    // Pago de deuda: partir en capital (traslado) + interés (costo financiero)
+    r = await registrarPagoDeudaPartido(datosTx, interes);
+    if (r.destino) {
+      const prodDestino = estado.productos.find(p => p.id === r.destino);
+      if (prodDestino && prodDestino.tipo === 'Tarjeta Crédito') {
+        await marcarCuotasPagoExtracto(r.destino, r.idTxCapital, m.fecha);
+      }
+    }
+  } else {
+    // Movimiento normal (no es pago de deuda)
+    r = construirFilaTx(datosTx);
+    await escribirFila('Transacciones', r.fila);
+    const prodSel = estado.productos.find(p => p.id === producto);
+    if (!r.esTraslado && prodSel && prodSel.tipo === 'Tarjeta Crédito') {
+      await generarCuotasTC(r.idTx, datosTx);
     }
   }
   await cargarDatos();
