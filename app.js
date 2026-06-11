@@ -699,6 +699,10 @@ function configurarFormularios() {
     ]);
     await actualizarSaldoProducto(datos.origen, 'Egreso', datos.monto);
     await actualizarSaldoProducto(datos.destino, 'Ingreso', datos.monto);
+    // Si el origen es una tarjeta/crédito, es una disposición: generar sus cuotas
+    if (datos.esDisposicion) {
+      await generarCuotasDisposicion(id, datos);
+    }
     await cargarDatos();
     mostrarSpinner(false);
     mostrarToast('✓ Traslado registrado');
@@ -789,12 +793,20 @@ function leerFormTx() {
 }
 
 function leerFormTr() {
+  const origen = document.getElementById('tr-origen').value;
+  const prodOrigen = estado.productos.find(p => p.id === origen);
+  const esDisposicion = prodOrigen && prodOrigen.tipo === 'Tarjeta Crédito';
   return {
     fecha: document.getElementById('tr-fecha').value,
-    origen: document.getElementById('tr-origen').value,
+    origen: origen,
     destino: document.getElementById('tr-destino').value,
     monto: parseFloat(document.getElementById('tr-monto').value) || 0,
-    descripcion: document.getElementById('tr-descripcion').value
+    descripcion: document.getElementById('tr-descripcion').value,
+    esDisposicion: esDisposicion,
+    numCuotas: parseInt(document.getElementById('tr-num-cuotas').value) || 1,
+    tasaPct: parseFloat(document.getElementById('tr-tasa-pct').value) || 0,
+    tasaTipo: document.getElementById('tr-tasa-tipo').value,
+    primeraCuota: document.getElementById('tr-primera-cuota').value
   };
 }
 
@@ -2580,6 +2592,38 @@ function calcularAmortizacionFrancesa(monto, n, iMensual) {
   }
 
   return cuotas;
+}
+
+// Genera las cuotas en Calendario_Deuda para una DISPOSICIÓN (avance/uso de cupo).
+// Calcula la tabla de amortización francesa y reparte capital + interés cuota por cuota.
+async function generarCuotasDisposicion(idTx, datos) {
+  const totalCuotas = datos.numCuotas || 1;
+  const iMensual = tasaMensualEfectiva(datos.tasaPct, datos.tasaTipo);
+  const tabla = calcularAmortizacionFrancesa(datos.monto, totalCuotas, iMensual);
+
+  const prod = estado.productos.find(p => p.id === datos.origen);
+  let primera = datos.primeraCuota
+    || calcularPrimerVencimiento(prod, datos.fecha)
+    || sumarUnMes(datos.fecha);
+
+  const base = new Date(primera + 'T00:00:00');
+  const diaCuota = base.getDate();
+  const idCompra = 'DISP' + Date.now();
+
+  for (let i = 0; i < totalCuotas; i++) {
+    let mes = base.getMonth() + i;
+    let anio = base.getFullYear() + Math.floor(mes / 12);
+    mes = mes % 12;
+    const ultimoDia = new Date(anio, mes + 1, 0).getDate();
+    const dia = Math.min(diaCuota, ultimoDia);
+    const fechaVenc = `${anio}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+
+    const idCuota = `${idCompra}-${String(i + 1).padStart(2, '0')}`;
+    await escribirFila('Calendario_Deuda', [
+      idCuota, idCompra, idTx, 'TC', datos.origen, datos.descripcion,
+      i + 1, totalCuotas, tabla[i].capital, tabla[i].interes, fechaVenc, 'Pendiente', ''
+    ]);
+  }
 }
 
 // Genera y escribe las filas de Cuotas_TC para una compra diferida (o de 1 cuota).
