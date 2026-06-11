@@ -2500,6 +2500,66 @@ async function anularCuotasDeTx(idTx) {
   }
 }
 
+// ── MOTOR DE AMORTIZACIÓN ─────────────────────────────────────────────
+// Convierte una tasa ingresada por el usuario a tasa MENSUAL EFECTIVA (decimal).
+// tipoTasa: 'mensual' (efectiva mensual), 'ea' (efectiva anual), 'nmv' (nominal mes vencido).
+// pct: el número tal cual lo escribe el usuario (ej. 28 para 28%, 1.41 para 1.41%).
+function tasaMensualEfectiva(pct, tipoTasa) {
+  const r = (parseFloat(pct) || 0) / 100;
+  if (r <= 0) return 0;
+  switch (tipoTasa) {
+    case 'mensual': return r;                     // ya es mensual efectiva
+    case 'ea':      return Math.pow(1 + r, 1 / 12) - 1; // efectiva anual → mensual
+    case 'nmv':     return r / 12;                // nominal mes vencido → mensual
+    default:        return r;                     // por defecto, tratar como mensual
+  }
+}
+
+// Calcula una tabla de amortización FRANCESA (cuota fija) para un crédito.
+// monto: capital dispuesto. n: número de cuotas. iMensual: tasa mensual efectiva (decimal).
+// Devuelve un arreglo de n objetos { capital, interes }, redondeados a pesos.
+// El ajuste por redondeo se aplica en la ÚLTIMA cuota de capital (Opción A),
+// para que la suma de capitales cuadre EXACTO con el monto dispuesto.
+function calcularAmortizacionFrancesa(monto, n, iMensual) {
+  const cuotas = [];
+
+  // Caso sin interés (tasa 0): capital parejo, interés 0.
+  if (iMensual <= 0) {
+    const capBase = Math.round(monto / n);
+    let acumulado = 0;
+    for (let k = 0; k < n; k++) {
+      let capital = (k < n - 1) ? capBase : (monto - acumulado);
+      acumulado += capital;
+      cuotas.push({ capital: Math.round(capital), interes: 0 });
+    }
+    return cuotas;
+  }
+
+  // Cuota fija francesa: C = monto * i / (1 - (1+i)^-n)
+  const factor = Math.pow(1 + iMensual, -n);
+  const cuotaFija = monto * iMensual / (1 - factor);
+
+  let saldo = monto;
+  let capitalAcumulado = 0;
+
+  for (let k = 0; k < n; k++) {
+    const interes = Math.round(saldo * iMensual);
+    let capital;
+    if (k < n - 1) {
+      capital = Math.round(cuotaFija) - interes;
+      // Saldo real (sin redondear) para el cálculo del interés del mes siguiente
+      saldo = saldo - (cuotaFija - (saldo * iMensual));
+    } else {
+      // Última cuota: el capital es todo lo que falta (cuadra al peso)
+      capital = monto - capitalAcumulado;
+    }
+    capitalAcumulado += capital;
+    cuotas.push({ capital: Math.round(capital), interes: interes });
+  }
+
+  return cuotas;
+}
+
 // Genera y escribe las filas de Cuotas_TC para una compra diferida (o de 1 cuota).
 // idTx: ID de la transacción origen. datos: lo leído del formulario + info de cuotas.
 async function generarCuotasTC(idTx, datos) {
