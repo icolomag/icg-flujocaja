@@ -933,5 +933,17 @@ tr:hover td { background: var(--bg2); }
 .flujo-fila.fila-roja { background: rgba(231,76,60,0.10); }
 .flujo-card-valor.amarillo { color: var(--amarillo); }
 
+/* ── Aviso de disposición en Traslado (avance/uso de cupo) ── */
+.disposicion-aviso {
+  background: #fff8e1;
+  border-left: 3px solid #ffb300;
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  font-size: 0.85rem;
+  color: #6d4c00;
+  line-height: 1.35;
+}
+
 Cuando hayas aplicado los tres cambios (app.js completo, nav + vista en index.html, estilos en styles.css), recarga la app en el navegador, vuelve a hacer login y ve a la pestaña Gmail.
 Confírmame qué ves.
