@@ -221,6 +221,12 @@
             <label>Descripción</label>
             <input type="text" id="tr-descripcion" placeholder="Ej: Paso excedentes a Fiducuenta" />
           </div>
+          <div class="campo-accion">
+            <div id="tr-preview" class="preview oculto"></div>
+            <button id="btn-tr-preview" class="btn-primario">Vista previa</button>
+            <button id="btn-tr-guardar" class="btn-confirmar oculto">✓ Confirmar y guardar</button>
+            <button id="btn-tr-cancelar" class="btn-secundario oculto">Cancelar</button>
+          </div>
           <div id="tr-disposicion-bloque" class="campo oculto">
             <div class="disposicion-aviso">
               💳 El origen es una tarjeta/crédito: esto es una <strong>disposición</strong> (avance o uso de cupo). Indica cómo se difiere para calcular las cuotas.
@@ -252,12 +258,6 @@
 
             <label style="margin-top:10px;display:block">Cuotas pendientes (marca las que pagas)</label>
             <div id="tr-cuotas-lista"></div>
-          </div>
-          <div class="campo-accion">
-            <div id="tr-preview" class="preview oculto"></div>
-            <button id="btn-tr-preview" class="btn-primario">Vista previa</button>
-            <button id="btn-tr-guardar" class="btn-confirmar oculto">✓ Confirmar y guardar</button>
-            <button id="btn-tr-cancelar" class="btn-secundario oculto">Cancelar</button>
           </div>
         </div>
       </div>
