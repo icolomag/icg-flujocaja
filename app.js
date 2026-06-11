@@ -2833,9 +2833,19 @@ function calcularFlujoFinanciero(mesYYYYMM) {
     estado.transacciones.forEach(t => {
       if (!t.fecha || t.fecha.substring(0, 7) !== mesYYYYMM) return;
 
+      const origenEsDeuda = idsDeuda.includes(t.origen);
+      const destinoEsDeuda = idsDeuda.includes(t.destino);
+
       // Abono a capital real: traslado cuyo destino es un producto de deuda
-      if (t.tipo === 'Traslado' && idsDeuda.includes(t.destino)) {
+      // (y el origen NO es deuda, para no contar traslados entre deudas)
+      if (t.tipo === 'Traslado' && destinoEsDeuda && !origenEsDeuda) {
         res.abonoCapitalReal += t.monto;
+      }
+
+      // Nuevo crédito real: traslado cuyo ORIGEN es un producto de deuda
+      // (disposición/avance: la TC/Crediágil financia una cuenta de caja)
+      if (t.tipo === 'Traslado' && origenEsDeuda && !destinoEsDeuda) {
+        res.nuevosCreditosReal += t.monto;
       }
 
       // Costo financiero real: transacción con subgrupo marcado Es_Costo_Financiero
