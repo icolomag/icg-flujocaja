@@ -746,6 +746,28 @@ function configurarFormularios() {
       }
     }
   });
+
+  // ── Mostrar bloque de disposición solo si el ORIGEN del traslado es Tarjeta Crédito ──
+  const selOrigen = document.getElementById('tr-origen');
+  const bloqueDisp = document.getElementById('tr-disposicion-bloque');
+
+  function actualizarVisibilidadDisposicion() {
+    const prod = estado.productos.find(p => p.id === selOrigen.value);
+    const esTC = prod && prod.tipo === 'Tarjeta Crédito';
+    bloqueDisp.classList.toggle('oculto', !esTC);
+    if (esTC) {
+      const fechaTr = document.getElementById('tr-fecha').value || new Date().toISOString().substring(0, 10);
+      const ayuda = document.getElementById('tr-primera-cuota-ayuda');
+      const venc = calcularPrimerVencimiento(prod, fechaTr) || sumarUnMes(fechaTr);
+      document.getElementById('tr-primera-cuota').value = venc;
+      ayuda.textContent = (calcularPrimerVencimiento(prod, fechaTr))
+        ? 'Calculada automáticamente — ajústala si el banco la pone otro día.'
+        : 'Sin corte fijo (ej. Crediágil): se tomó un mes desde la fecha. Ajústala si aplica.';
+    }
+  }
+
+  selOrigen.addEventListener('change', actualizarVisibilidadDisposicion);
+  document.getElementById('tr-fecha').addEventListener('change', actualizarVisibilidadDisposicion);
 }
 
 function leerFormTx() {
@@ -2595,6 +2617,18 @@ async function generarCuotasTC(idTx, datos) {
       i + 1, totalCuotas, capitalPorCuota, 0, fechaVenc, 'Pendiente', ''
     ]);
   }
+}
+
+// Suma un mes a una fecha 'YYYY-MM-DD', cuidando meses cortos. Para productos sin corte fijo.
+function sumarUnMes(fechaStr) {
+  const f = new Date(fechaStr + 'T00:00:00');
+  const dia = f.getDate();
+  let mes = f.getMonth() + 1;
+  let anio = f.getFullYear();
+  if (mes > 11) { mes -= 12; anio += 1; }
+  const ultimoDia = new Date(anio, mes + 1, 0).getDate();
+  const diaFinal = Math.min(dia, ultimoDia);
+  return `${anio}-${String(mes + 1).padStart(2, '0')}-${String(diaFinal).padStart(2, '0')}`;
 }
 
 // Calcula la fecha de vencimiento de la primera cuota de una compra con TC.
