@@ -242,6 +242,17 @@
             <input type="date" id="tr-primera-cuota">
             <small id="tr-primera-cuota-ayuda" style="color:#888"></small>
           </div>
+          <div id="tr-pago-deuda-bloque" class="campo oculto">
+            <div class="disposicion-aviso">
+              🏦 El destino es una deuda: este pago se parte en <strong>capital</strong> (traslado) e <strong>interés</strong> (costo financiero). Marca las cuotas que estás pagando.
+            </div>
+            <label for="tr-interes">Interés incluido en el pago (COP)</label>
+            <input type="number" id="tr-interes" min="0" step="1" value="0" placeholder="0">
+            <small style="color:#888">Tómalo del extracto. Si es 0, el pago va completo a capital.</small>
+
+            <label style="margin-top:10px;display:block">Cuotas pendientes (marca las que pagas)</label>
+            <div id="tr-cuotas-lista"></div>
+          </div>
           <div class="campo-accion">
             <div id="tr-preview" class="preview oculto"></div>
             <button id="btn-tr-preview" class="btn-primario">Vista previa</button>
