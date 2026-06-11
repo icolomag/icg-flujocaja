@@ -646,6 +646,88 @@ function renderHistorial(filtroTipo = '', filtroGrupo = '') {
   </table>`;
 }
 
+// ── DETECCIÓN DE PRODUCTO DE DEUDA ────────────────────────────────────
+// Devuelve true si el producto es una deuda: Tarjeta Crédito o crédito/
+// hipoteca/libranza/pasivo. Mismo criterio que usa calcularFlujoFinanciero.
+function esProductoDeuda(productoId) {
+  const p = estado.productos.find(x => x.id === productoId);
+  if (!p) return false;
+  const t = (p.tipo || '').toLowerCase();
+  return t === 'tarjeta crédito' || t === 'tarjeta credito' ||
+         t.includes('crédito') || t.includes('credito') ||
+         t.includes('hipotec') || t.includes('libranza') || t.includes('pasivo');
+}
+
+// ── PAGO DE DEUDA POR TRASLADO: lista de cuotas con checkbox ───────────
+// Muestra/oculta el bloque de pago de deuda según si el DESTINO es deuda.
+// Renderiza las cuotas pendientes de ese producto, premarcando las que
+// vencen en el mes de la fecha del traslado.
+function actualizarBloquePagoDeuda() {
+  const destinoId = document.getElementById('tr-destino').value;
+  const bloque = document.getElementById('tr-pago-deuda-bloque');
+  const esDeuda = esProductoDeuda(destinoId);
+  bloque.classList.toggle('oculto', !esDeuda);
+  if (!esDeuda) {
+    document.getElementById('tr-cuotas-lista').innerHTML = '';
+    return;
+  }
+  renderCuotasPagoDeuda(destinoId);
+}
+
+function renderCuotasPagoDeuda(destinoId) {
+  const cont = document.getElementById('tr-cuotas-lista');
+  const fechaTr = document.getElementById('tr-fecha').value || '';
+  const mesPago = fechaTr.substring(0, 7); // YYYY-MM
+
+  // Cuotas pendientes de este producto, ordenadas por vencimiento
+  const pendientes = (estado.cuotasTC || [])
+    .filter(c => c.productoTC === destinoId && c.estado === 'Pendiente')
+    .sort((a, b) => (a.fechaVencimiento || '').localeCompare(b.fechaVencimiento || ''));
+
+  if (pendientes.length === 0) {
+    cont.innerHTML = '<p style="color:#888;font-size:13px">Este producto no tiene cuotas pendientes en el calendario.</p>';
+    return;
+  }
+
+  let html = '';
+  pendientes.forEach(c => {
+    const venceEnMes = (c.fechaVencimiento || '').substring(0, 7) === mesPago;
+    const numTxt = c.totalCuotas ? `${c.numCuota}/${c.totalCuotas}` : `${c.numCuota}`;
+    const desc = c.descripcion || '(sin descripción)';
+    html += `
+      <label class="cuota-check" style="display:flex;align-items:flex-start;gap:8px;padding:6px 8px;border:1px solid #eee;border-radius:6px;margin:4px 0;cursor:pointer">
+        <input type="checkbox" class="tr-cuota-input" value="${c.idCuota}" ${venceEnMes ? 'checked' : ''} style="margin-top:3px">
+        <span style="font-size:13px;line-height:1.4">
+          <strong>Cuota ${numTxt}</strong> · vence ${formatearFechaCorta(c.fechaVencimiento)}<br>
+          <span style="color:#666">${desc}</span><br>
+          <span style="color:#888">capital ${fmt(c.capitalCuota)} + interés ${fmt(c.interesCuota)}</span>
+        </span>
+      </label>`;
+  });
+  cont.innerHTML = html;
+}
+
+// Formatea YYYY-MM-DD a DD/MM/YYYY (vacío si no hay fecha)
+function formatearFechaCorta(f) {
+  if (!f) return '—';
+  const partes = f.substring(0, 10).split('-');
+  if (partes.length !== 3) return f;
+  return `${partes[2]}/${partes[1]}/${partes[0]}`;
+}
+
+// Marca como Pagada las cuotas (por ID_Cuota) tildadas en el bloque de pago
+// de deuda, guardando el ID del traslado en la columna de trazabilidad.
+async function marcarCuotasSeleccionadas(idsCuotas, idTxPago) {
+  if (!idsCuotas || idsCuotas.length === 0) return;
+  const filas = await leerHoja('Calendario_Deuda!A2:M');
+  for (let i = 0; i < filas.length; i++) {
+    if (idsCuotas.includes(filas[i][0]) && filas[i][11] === 'Pendiente') {
+      await actualizarCelda(`Calendario_Deuda!L${i + 2}`, 'Pagada');
+      await actualizarCelda(`Calendario_Deuda!M${i + 2}`, idTxPago);
+    }
+  }
+}
+
 // ── FORMULARIOS ───────────────────────────────────────────────────────
 function configurarFormularios() {
   const hoy = new Date().toISOString().split('T')[0];
@@ -706,13 +788,26 @@ function configurarFormularios() {
     if (!validarTr(datos)) return;
     const origen = estado.productos.find(p => p.id === datos.origen);
     const destino = estado.productos.find(p => p.id === datos.destino);
+
+    let extra = '';
+    if (esProductoDeuda(datos.destino) && !datos.esDisposicion) {
+      const interes = parseFloat(document.getElementById('tr-interes').value) || 0;
+      const capital = datos.monto - interes;
+      const nCuotas = document.querySelectorAll('.tr-cuota-input:checked').length;
+      extra = `
+        <br>── Pago de deuda ──<br>
+        💵 Capital (traslado): ${fmt(capital)}<br>
+        💸 Interés (costo financiero): ${fmt(interes)}<br>
+        ✅ Cuotas a marcar pagadas: ${nCuotas}`;
+    }
+
     document.getElementById('tr-preview').innerHTML = `
       <strong>Confirmar traslado:</strong><br>
       📅 Fecha: ${datos.fecha}<br>
       🏦 Origen: ${origen ? origen.nombre : datos.origen}<br>
       🏦 Destino: ${destino ? destino.nombre : datos.destino}<br>
       💰 Monto: ${fmt(datos.monto)}<br>
-      📝 ${datos.descripcion}
+      📝 ${datos.descripcion}${extra}
     `;
     document.getElementById('tr-preview').classList.remove('oculto');
     document.getElementById('btn-tr-guardar').classList.remove('oculto');
@@ -724,23 +819,87 @@ function configurarFormularios() {
 
   document.getElementById('btn-tr-guardar').addEventListener('click', async () => {
     const datos = leerFormTr();
+    const btn = document.getElementById('btn-tr-guardar');
+    btn.disabled = true;
+    const textoOrig = btn.textContent;
+    btn.textContent = 'Guardando...';
     mostrarSpinner(true);
-    const id = 'TX' + Date.now();
-    await escribirFila('Transacciones', [
-      id, datos.fecha, 'Traslado', 'Traslados', 'Traslado entre cuentas',
-      datos.origen, datos.destino, datos.monto, datos.descripcion, 'Manual', 'TRUE', ''
-    ]);
-    await actualizarSaldoProducto(datos.origen, 'Egreso', datos.monto);
-    await actualizarSaldoProducto(datos.destino, 'Ingreso', datos.monto);
-    // Si el origen es una tarjeta/crédito, es una disposición: generar sus cuotas
-    if (datos.esDisposicion) {
-      await generarCuotasDisposicion(id, datos);
+    try {
+      // ¿El destino es una deuda? → pago de deuda partido (capital + interés)
+      const destinoEsDeuda = esProductoDeuda(datos.destino) && !datos.esDisposicion;
+
+      if (destinoEsDeuda) {
+        const interes = parseFloat(document.getElementById('tr-interes').value) || 0;
+        const capital = datos.monto - interes;
+        if (capital < 0) {
+          mostrarSpinner(false);
+          btn.disabled = false; btn.textContent = textoOrig;
+          mostrarToast('El interés no puede ser mayor que el monto del pago');
+          return;
+        }
+
+        // Cuotas tildadas por el usuario
+        const idsCuotas = Array.from(document.querySelectorAll('.tr-cuota-input:checked'))
+          .map(chk => chk.value);
+
+        const idCapital = 'TX' + Date.now();
+        // 1) Traslado del CAPITAL (monto - interés) a la deuda
+        await escribirFila('Transacciones', [
+          idCapital, datos.fecha, 'Traslado', 'Traslados', 'Pago de deuda',
+          datos.origen, datos.destino, capital,
+          datos.descripcion || 'Pago de deuda', 'Manual', 'TRUE', ''
+        ]);
+
+        // 2) Egreso de COSTO FINANCIERO por el interés (desde la cuenta origen)
+        if (interes > 0) {
+          const gCF = estado.grupos.find(x => x.subgrupo === 'Costo financiero');
+          if (!gCF) {
+            mostrarToast('⚠️ No encontré el subgrupo "Costo financiero" en Grupos. El interés NO se registró.');
+          } else {
+            await escribirFila('Transacciones', [
+              'TX' + (Date.now() + 1), datos.fecha, 'Egreso', gCF.grupo, 'Costo financiero',
+              datos.origen, '', interes,
+              'Interés ' + (datos.descripcion || 'pago de deuda'), 'Manual', 'TRUE', ''
+            ]);
+          }
+        }
+
+        // 3) Marcar como Pagada las cuotas tildadas (el traslado de capital es la trazabilidad)
+        await marcarCuotasSeleccionadas(idsCuotas, idCapital);
+
+        await cargarDatos();
+        mostrarSpinner(false);
+        btn.disabled = false; btn.textContent = textoOrig;
+        mostrarToast('✓ Pago de deuda registrado' + (interes > 0 ? ' (capital + interés)' : ''));
+        resetFormTr();
+        cambiarVista('dashboard');
+        return;
+      }
+
+      // ── Traslado normal / disposición (comportamiento de siempre) ──
+      const id = 'TX' + Date.now();
+      await escribirFila('Transacciones', [
+        id, datos.fecha, 'Traslado', 'Traslados', 'Traslado entre cuentas',
+        datos.origen, datos.destino, datos.monto, datos.descripcion, 'Manual', 'TRUE', ''
+      ]);
+      await actualizarSaldoProducto(datos.origen, 'Egreso', datos.monto);
+      await actualizarSaldoProducto(datos.destino, 'Ingreso', datos.monto);
+      // Si el origen es una tarjeta/crédito, es una disposición: generar sus cuotas
+      if (datos.esDisposicion) {
+        await generarCuotasDisposicion(id, datos);
+      }
+      await cargarDatos();
+      mostrarSpinner(false);
+      btn.disabled = false; btn.textContent = textoOrig;
+      mostrarToast('✓ Traslado registrado');
+      resetFormTr();
+      cambiarVista('dashboard');
+    } catch (e) {
+      mostrarSpinner(false);
+      btn.disabled = false; btn.textContent = textoOrig;
+      mostrarToast('Error registrando: ' + e.message);
+      console.error(e);
     }
-    await cargarDatos();
-    mostrarSpinner(false);
-    mostrarToast('✓ Traslado registrado');
-    resetFormTr();
-    cambiarVista('dashboard');
   });
 
   document.getElementById('btn-filtrar').addEventListener('click', () => {
@@ -805,6 +964,10 @@ function configurarFormularios() {
 
   selOrigen.addEventListener('change', actualizarVisibilidadDisposicion);
   document.getElementById('tr-fecha').addEventListener('change', actualizarVisibilidadDisposicion);
+
+  // ── Pago de deuda: mostrar bloque y lista de cuotas cuando el DESTINO es deuda ──
+  document.getElementById('tr-destino').addEventListener('change', actualizarBloquePagoDeuda);
+  document.getElementById('tr-fecha').addEventListener('change', actualizarBloquePagoDeuda);
 }
 
 function leerFormTx() {
@@ -887,6 +1050,13 @@ function resetFormTr() {
   document.getElementById('btn-tr-guardar').classList.add('oculto');
   document.getElementById('btn-tr-cancelar').classList.add('oculto');
   document.getElementById('btn-tr-preview').classList.remove('oculto');
+  // Limpiar bloque de pago de deuda
+  const bloqueDeuda = document.getElementById('tr-pago-deuda-bloque');
+  if (bloqueDeuda) bloqueDeuda.classList.add('oculto');
+  const intInput = document.getElementById('tr-interes');
+  if (intInput) intInput.value = '0';
+  const lista = document.getElementById('tr-cuotas-lista');
+  if (lista) lista.innerHTML = '';
 }
 
 // ── VALIDACIÓN DE PERÍODO CERRADO ─────────────────────────────────────
