@@ -330,6 +330,10 @@ function renderCorreosPendientes(correos) {
         <select class="correo-select" id="correo-sub-${c.gmailId}" onchange="revisarInteresCorreo('${c.gmailId}')"></select>
         <input class="correo-input" id="correo-desc-${c.gmailId}" type="text" placeholder="Descripción" value="${c.asunto.substring(0,50)}" />
         <div class="aviso-cuota-tc oculto" id="correo-aviso-${c.gmailId}" style="font-size:0.85em;color:#0a7;margin-top:4px;">ℹ️ Se registrará a 1 cuota. Para diferir, usa +Transacción.</div>
+        <div class="campo-interes-deuda oculto" id="correo-int-bloque-${c.gmailId}" style="margin-top:6px;">
+          <label style="font-size:0.85em;color:var(--texto2)">Interés incluido en el pago (si aplica):</label>
+          <input class="correo-input" id="correo-int-${c.gmailId}" type="number" min="0" value="0" placeholder="0" />
+        </div>
       </div>
       ${cerrado ? '<div class="correo-cerrado-aviso">🔒 Fecha de un mes ya cerrado — no se puede registrar</div>' : ''}
       <div class="correo-acciones">
@@ -1354,10 +1358,6 @@ function renderMovimientosImagen(movimientos) {
         <div class="campo-interes-deuda oculto" id="img-int-bloque-${i}" style="margin-top:6px;">
           <label style="font-size:0.85em;color:var(--texto2)">Interés incluido en el pago (si aplica):</label>
           <input class="correo-input" id="img-int-${i}" type="number" min="0" value="0" placeholder="0" />
-        </div>
-        <div class="campo-interes-deuda oculto" id="correo-int-bloque-${c.gmailId}" style="margin-top:6px;">
-          <label style="font-size:0.85em;color:var(--texto2)">Interés incluido en el pago (si aplica):</label>
-          <input class="correo-input" id="correo-int-${c.gmailId}" type="number" min="0" value="0" placeholder="0" />
         </div>
       </div>
       <div class="movimiento-acciones">
