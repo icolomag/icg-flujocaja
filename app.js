@@ -2429,13 +2429,25 @@ async function guardarNomina() {
       cuentaDestino, '', bruto, 'Salario bruto quincena', 'Nómina', 'TRUE', ''
     ]);
 
-    // 2. Registrar cada descuento como egreso de la cuenta
+    // 2. Registrar cada descuento.
+    //    Si el subgrupo apunta a una cuenta/producto (tiene Cuenta_Destino en
+    //    Grupos) → se registra como Traslado a ese producto (ej. libranza → cuenta
+    //    puente P22). Si no, como Egreso normal de la cuenta.
     let i = 1;
     for (const d of descuentos) {
-      await escribirFila('Transacciones', [
-        'TX' + (baseId + i), fecha, 'Egreso', d.grupo, d.sub,
-        cuentaDestino, '', d.valor, 'Descuento nómina', 'Nómina', 'TRUE', ''
-      ]);
+      const gDesc = estado.grupos.find(x => x.grupo === d.grupo && x.subgrupo === d.sub);
+      const ctaDestino = gDesc && gDesc.cuentaDestino ? gDesc.cuentaDestino : '';
+      if (ctaDestino) {
+        await escribirFila('Transacciones', [
+          'TX' + (baseId + i), fecha, 'Traslado', d.grupo, d.sub,
+          cuentaDestino, ctaDestino, d.valor, 'Descuento nómina', 'Nómina', 'TRUE', ''
+        ]);
+      } else {
+        await escribirFila('Transacciones', [
+          'TX' + (baseId + i), fecha, 'Egreso', d.grupo, d.sub,
+          cuentaDestino, '', d.valor, 'Descuento nómina', 'Nómina', 'TRUE', ''
+        ]);
+      }
       i++;
     }
 
