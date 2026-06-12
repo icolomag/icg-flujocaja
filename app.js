@@ -604,6 +604,7 @@ function poblarSelectores() {
     elSub.innerHTML = '<option value="">— Selecciona subgrupo —</option>' +
       subs.map(s => `<option value="${s}">${s}</option>`).join('');
     elSub.disabled = false;
+    actualizarAvisoDeudaTx();
   });
 }
 
@@ -737,6 +738,11 @@ function configurarFormularios() {
   document.getElementById('btn-tx-preview').addEventListener('click', () => {
     const datos = leerFormTx();
     if (!validarTx(datos)) return;
+    if (subgrupoEsDeudaTx()) {
+      actualizarAvisoDeudaTx();
+      mostrarToast('💡 Este es un pago de deuda: regístralo por la pestaña Traslado.');
+      return;
+    }
     const prod = estado.productos.find(p => p.id === datos.producto);
     document.getElementById('tx-preview').innerHTML = `
       <strong>Confirmar registro:</strong><br>
@@ -754,8 +760,23 @@ function configurarFormularios() {
 
   document.getElementById('btn-tx-cancelar').addEventListener('click', resetFormTx);
 
+  // ── Blindaje: avisar que los pagos de deuda van por Traslado ──
+  document.getElementById('tx-subgrupo').addEventListener('change', actualizarAvisoDeudaTx);
+  const btnIrTraslado = document.getElementById('btn-tx-ir-traslado');
+  if (btnIrTraslado) {
+    btnIrTraslado.addEventListener('click', () => {
+      resetFormTx();
+      cambiarVista('traslado');
+    });
+  }
+
   document.getElementById('btn-tx-guardar').addEventListener('click', async () => {
     const datos = leerFormTx();
+    // Blindaje: los pagos de deuda no se procesan acá, van por Traslado
+    if (subgrupoEsDeudaTx()) {
+      mostrarToast('💡 Este es un pago de deuda: regístralo por la pestaña Traslado (separa capital e interés).');
+      return;
+    }
     if (esPeriodoCerrado(datos.fecha)) {
       mostrarToast('🔒 No se puede registrar: la fecha pertenece a un mes ya cerrado');
       return;
@@ -970,6 +991,22 @@ function configurarFormularios() {
   document.getElementById('tr-fecha').addEventListener('change', actualizarBloquePagoDeuda);
 }
 
+// ¿El subgrupo seleccionado en +Transacción apunta a una deuda? (tiene Cuenta_Destino)
+function subgrupoEsDeudaTx() {
+  const grupo = document.getElementById('tx-grupo').value;
+  const subgrupo = document.getElementById('tx-subgrupo').value;
+  const g = estado.grupos.find(x => x.grupo === grupo && x.subgrupo === subgrupo);
+  return !!(g && g.cuentaDestino);
+}
+
+// Muestra u oculta el aviso de "esto va por Traslado" según el subgrupo elegido
+function actualizarAvisoDeudaTx() {
+  const aviso = document.getElementById('tx-aviso-deuda');
+  if (!aviso) return;
+  if (subgrupoEsDeudaTx()) aviso.classList.remove('oculto');
+  else aviso.classList.add('oculto');
+}
+
 function leerFormTx() {
   const diferir = document.getElementById('tx-diferir');
   const esDiferido = diferir && diferir.checked;
@@ -1039,6 +1076,8 @@ function resetFormTx() {
   document.getElementById('btn-tx-guardar').classList.add('oculto');
   document.getElementById('btn-tx-cancelar').classList.add('oculto');
   document.getElementById('btn-tx-preview').classList.remove('oculto');
+  const avisoDeuda = document.getElementById('tx-aviso-deuda');
+  if (avisoDeuda) avisoDeuda.classList.add('oculto');
 }
 
 function resetFormTr() {
