@@ -945,5 +945,14 @@ tr:hover td { background: var(--bg2); }
   line-height: 1.35;
 }
 
-Cuando hayas aplicado los tres cambios (app.js completo, nav + vista en index.html, estilos en styles.css), recarga la app en el navegador, vuelve a hacer login y ve a la pestaña Gmail.
-Confírmame qué ves.
+.aviso-deuda {
+  background: #fff8e1;
+  border: 1px solid #f0c850;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 4px 0 12px;
+  font-size: 13px;
+  color: #6d4c00;
+  line-height: 1.4;
+}
+.aviso-deuda strong { color: #5a3f00; }
