@@ -448,7 +448,7 @@ async function cargarDatos() {
   mostrarSpinner(true);
   try {
     const [filasProductos, filasGrupos, filasTx, filasPpto, filasContexto, filasConfig, filasCuotas] = await Promise.all([
-      leerHoja('Productos!A2:O'),
+      leerHoja('Productos!A2:P'),
       leerHoja('Grupos!A2:E'),
       leerHoja('Transacciones!A2:L'),
       leerHoja('Presupuesto!A2:F'),
