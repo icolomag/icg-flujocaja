@@ -626,6 +626,16 @@ function renderHistorial(filtroTipo = '', filtroGrupo = '') {
       ${txs.map(t => {
         const cls = t.tipo === 'Ingreso' ? 'tx-ingreso' : t.tipo === 'Egreso' ? 'tx-egreso' : 'tx-traslado';
         const prod = estado.productos.find(p => p.id === t.origen);
+        // En traslados mostramos "origen → destino"; en el resto, solo el producto.
+        let celdaProducto;
+        if (t.tipo === 'Traslado') {
+          const prodDest = estado.productos.find(p => p.id === t.destino);
+          const nomOrigen = prod ? prod.nombre : (t.origen || '—');
+          const nomDestino = prodDest ? prodDest.nombre : (t.destino || '—');
+          celdaProducto = `${nomOrigen} → ${nomDestino}`;
+        } else {
+          celdaProducto = prod ? prod.nombre : t.origen;
+        }
         const editable = t.fecha && t.fecha > corte;
         const acciones = editable
           ? `<button class="btn-tx-editar" onclick="abrirEdicionTx('${t.id}')" title="Editar">✏️</button>
@@ -636,7 +646,7 @@ function renderHistorial(filtroTipo = '', filtroGrupo = '') {
           <td class="${cls}">${t.tipo}</td>
           <td>${t.grupo}</td>
           <td>${t.subgrupo}</td>
-          <td>${prod ? prod.nombre : t.origen}</td>
+          <td>${celdaProducto}</td>
           <td class="${cls}">${t.tipo === 'Egreso' ? '-' : ''}${fmt(Math.abs(t.monto))}</td>
           <td>${t.descripcion || ''}</td>
           <td style="color:var(--texto2);font-size:12px">${t.fuente || ''}</td>
