@@ -466,7 +466,8 @@ async function cargarDatos() {
       fechaPago: f[9] || '', fechaCorte: f[10] || '',
       disponible: f[11] === 'TRUE', estado: f[12] || 'Activa',
       comentarios: f[13] || '',
-      saldoCierre: parseFloat(f[14]) || 0
+      saldoCierre: parseFloat(f[14]) || 0,
+      metodoAmortizacion: f[15] || ''
     }));
 
     estado.grupos = filasGrupos.map(f => ({ tipo: f[0], grupo: f[1], subgrupo: f[2], cuentaDestino: f[3] || '', esCostoFinanciero: (f[4] || '').toString().toUpperCase() === 'SI' }));
@@ -2935,8 +2936,65 @@ function calcularAmortizacionFrancesa(monto, n, iMensual) {
   return cuotas;
 }
 
+// Amortización ALEMANA (capital constante): se abona el mismo capital cada mes,
+// y el interés se calcula sobre el saldo que va bajando → la cuota total decrece.
+// Típico de TC en Colombia (avances, compras a cuotas, compra de cartera).
+function calcularAmortizacionAlemana(monto, n, iMensual) {
+  const cuotas = [];
+
+  // Caso sin interés (tasa 0): capital parejo, interés 0 (igual que francés).
+  if (iMensual <= 0) {
+    const capBase = Math.round(monto / n);
+    let acumulado = 0;
+    for (let k = 0; k < n; k++) {
+      let capital = (k < n - 1) ? capBase : (monto - acumulado);
+      acumulado += capital;
+      cuotas.push({ capital: Math.round(capital), interes: 0 });
+    }
+    return cuotas;
+  }
+
+  const capitalBase = monto / n;
+  let saldo = monto;
+  let capitalAcumulado = 0;
+
+  for (let k = 0; k < n; k++) {
+    const interes = Math.round(saldo * iMensual);
+    let capital;
+    if (k < n - 1) {
+      capital = Math.round(capitalBase);
+    } else {
+      // Última cuota: cuadra el capital al peso (suma exacta = monto)
+      capital = monto - capitalAcumulado;
+    }
+    capitalAcumulado += capital;
+    saldo = saldo - capital;
+    cuotas.push({ capital: Math.round(capital), interes: interes });
+  }
+  return cuotas;
+}
+
+// Normaliza el método de amortización leído de la hoja Productos.
+// Tolerante a mayúsculas/tildes: "Alemán", "ALEMAN", "aleman" → 'aleman'.
+// Cualquier otro valor (incluido vacío) → 'frances' (fallback seguro).
+function normalizarMetodoAmortizacion(valor) {
+  const v = (valor || '').toString().trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // quita tildes
+  return v === 'aleman' ? 'aleman' : 'frances';
+}
+
+// DESPACHADOR: punto único de cálculo de tablas de amortización.
+// Recibe el método (de la hoja Productos) y reparte al cálculo correcto.
+// Lo usan TODOS los puntos que generan cuotas (Traslado y +Transacción),
+// para tener un solo modelo de funcionamiento.
+function calcularAmortizacion(monto, n, iMensual, metodo) {
+  return normalizarMetodoAmortizacion(metodo) === 'aleman'
+    ? calcularAmortizacionAlemana(monto, n, iMensual)
+    : calcularAmortizacionFrancesa(monto, n, iMensual);
+}
+
 // Genera las cuotas en Calendario_Deuda para una DISPOSICIÓN (avance/uso de cupo).
-// Calcula la tabla de amortización francesa y reparte capital + interés cuota por cuota.
+// Calcula la tabla de amortización y reparte capital + interés cuota por cuota.
 async function generarCuotasDisposicion(idTx, datos) {
   const totalCuotas = datos.numCuotas || 1;
   const iMensual = tasaMensualEfectiva(datos.tasaPct, datos.tasaTipo);
