@@ -151,10 +151,6 @@
               <option value="">— Primero selecciona grupo —</option>
             </select>
           </div>
-          <div id="tx-aviso-deuda" class="aviso-deuda oculto">
-            ℹ️ Los pagos de deuda (tarjetas, créditos, hipoteca) se registran por la pestaña <strong>Traslado</strong>, que separa capital e interés y marca las cuotas. Acá no se procesan.
-            <button type="button" id="btn-tx-ir-traslado" class="btn-secundario" style="margin-top:8px">Ir a Traslado</button>
-          </div>
           <div class="campo">
             <label>Producto</label>
             <select id="tx-producto">
@@ -186,6 +182,17 @@
               <label class="check-diferir" style="margin-top:8px">
                 <input type="checkbox" id="tx-con-interes"> Esta compra genera intereses
               </label>
+              <div id="tx-tasa-bloque" class="oculto">
+                <label for="tx-tasa-pct" style="margin-top:8px">Tasa de interés (%)</label>
+                <input type="number" id="tx-tasa-pct" min="0" step="0.01" placeholder="Ej: 2.1">
+                <label for="tx-tasa-tipo" style="margin-top:8px">Tipo de tasa</label>
+                <select id="tx-tasa-tipo">
+                  <option value="mensual">Mensual efectiva</option>
+                  <option value="ea">E.A. (efectiva anual)</option>
+                  <option value="nmv">N.M.V. (nominal mes vencido)</option>
+                </select>
+                <small id="tx-metodo-ayuda" style="color:#888; display:block; margin-top:6px"></small>
+              </div>
             </div>
           </div>
           <div class="campo-accion">
