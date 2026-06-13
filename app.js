@@ -975,6 +975,25 @@ function configurarFormularios() {
     }
   });
 
+  // ── Al marcar "genera intereses": mostrar campos de tasa y el método del producto ──
+  const chkInteres = document.getElementById('tx-con-interes');
+  if (chkInteres) {
+    chkInteres.addEventListener('change', () => {
+      const bloqueTasa = document.getElementById('tx-tasa-bloque');
+      bloqueTasa.classList.toggle('oculto', !chkInteres.checked);
+      if (chkInteres.checked) {
+        const prod = estado.productos.find(p => p.id === selProducto.value);
+        const metodo = normalizarMetodoAmortizacion(prod ? prod.metodoAmortizacion : '');
+        const ayudaM = document.getElementById('tx-metodo-ayuda');
+        if (ayudaM) {
+          ayudaM.textContent = metodo === 'aleman'
+            ? 'Este producto amortiza con método alemán (cuota decreciente).'
+            : 'Este producto amortiza con método francés (cuota fija).';
+        }
+      }
+    });
+  }
+
   // ── Mostrar bloque de disposición solo si el ORIGEN del traslado es Tarjeta Crédito ──
   const selOrigen = document.getElementById('tr-origen');
   const bloqueDisp = document.getElementById('tr-disposicion-bloque');
@@ -1032,7 +1051,9 @@ function leerFormTx() {
     notas: document.getElementById('tx-notas').value,
     numCuotas: esDiferido ? (parseInt(document.getElementById('tx-num-cuotas').value) || 1) : 1,
     primeraCuota: esDiferido ? document.getElementById('tx-primera-cuota').value : '',
-    conInteres: esDiferido ? document.getElementById('tx-con-interes').checked : false
+    conInteres: esDiferido ? document.getElementById('tx-con-interes').checked : false,
+    tasaPct: esDiferido ? (parseFloat(document.getElementById('tx-tasa-pct').value) || 0) : 0,
+    tasaTipo: esDiferido ? document.getElementById('tx-tasa-tipo').value : 'mensual'
   };
 }
 
@@ -3032,8 +3053,18 @@ async function generarCuotasTC(idTx, datos) {
   if (!prod) return;
 
   const totalCuotas = datos.numCuotas || 1;
-  const capitalPorCuota = Math.round(datos.monto / totalCuotas);
   const idCompra = 'CMP' + Date.now();
+
+  // Si la compra genera intereses, calculamos la tabla con el método del producto
+  // (francés/alemán, leído de la hoja Productos). Si no, capital parejo e interés 0.
+  let tabla;
+  if (datos.conInteres && datos.tasaPct > 0) {
+    const iMensual = tasaMensualEfectiva(datos.tasaPct, datos.tasaTipo);
+    tabla = calcularAmortizacion(datos.monto, totalCuotas, iMensual, prod.metodoAmortizacion);
+  } else {
+    // Sin interés: reparto parejo (la última cuota cuadra el redondeo)
+    tabla = calcularAmortizacion(datos.monto, totalCuotas, 0, prod.metodoAmortizacion);
+  }
 
   // Fecha de la primera cuota: la que el usuario confirmó, o la calculada
   let primera = datos.primeraCuota || calcularPrimerVencimiento(prod, datos.fecha);
@@ -3057,7 +3088,7 @@ async function generarCuotasTC(idTx, datos) {
     const idCuota = `${idCompra}-${String(i + 1).padStart(2, '0')}`;
     await escribirFila('Calendario_Deuda', [
       idCuota, idCompra, idTx, 'TC', datos.producto, datos.descripcion,
-      i + 1, totalCuotas, capitalPorCuota, 0, fechaVenc, 'Pendiente', ''
+      i + 1, totalCuotas, tabla[i].capital, tabla[i].interes, fechaVenc, 'Pendiente', ''
     ]);
   }
 }
