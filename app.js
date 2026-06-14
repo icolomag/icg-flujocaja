@@ -1010,6 +1010,13 @@ function configurarFormularios() {
       ayuda.textContent = (calcularPrimerVencimiento(prod, fechaTr))
         ? 'Calculada automáticamente — ajústala si el banco la pone otro día.'
         : 'Sin corte fijo (ej. Crediágil): se tomó un mes desde la fecha. Ajústala si aplica.';
+      const ayudaM = document.getElementById('tr-metodo-ayuda');
+      if (ayudaM) {
+        const metodo = normalizarMetodoAmortizacion(prod.metodoAmortizacion);
+        ayudaM.textContent = metodo === 'aleman'
+          ? 'Esta tarjeta amortiza con método alemán (cuota decreciente).'
+          : 'Esta tarjeta amortiza con método francés (cuota fija).';
+      }
     }
   }
 
@@ -3019,9 +3026,12 @@ function calcularAmortizacion(monto, n, iMensual, metodo) {
 async function generarCuotasDisposicion(idTx, datos) {
   const totalCuotas = datos.numCuotas || 1;
   const iMensual = tasaMensualEfectiva(datos.tasaPct, datos.tasaTipo);
-  const tabla = calcularAmortizacionFrancesa(datos.monto, totalCuotas, iMensual);
 
   const prod = estado.productos.find(p => p.id === datos.origen);
+  // La tabla se calcula con el método del producto de origen (la TC/crédito desde
+  // donde se dispone): alemán o francés según la hoja Productos. Modelo único.
+  const tabla = calcularAmortizacion(datos.monto, totalCuotas, iMensual, prod ? prod.metodoAmortizacion : '');
+
   let primera = datos.primeraCuota
     || calcularPrimerVencimiento(prod, datos.fecha)
     || sumarUnMes(datos.fecha);
