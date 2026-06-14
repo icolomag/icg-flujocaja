@@ -530,17 +530,6 @@ function renderDashboard() {
   const totDeu = deudas.reduce((s, p) => s + p.saldoActual, 0);
   const neto = totDis + totInv + totDeu;
 
-  const mesActual = new Date().toISOString().substring(0, 7);
-  const comprometido = calcularComprometidoMes(mesActual);
-  const dispNeto = totDis - comprometido;
-  const elComp = document.getElementById('total-comprometido');
-  const elDispNeto = document.getElementById('disponible-neto');
-  if (elComp) elComp.textContent = fmt(comprometido);
-  if (elDispNeto) {
-    elDispNeto.textContent = fmt(dispNeto);
-    elDispNeto.className = dispNeto >= 0 ? 'verde' : 'rojo';
-  }
-
   document.getElementById('total-disponible').textContent = fmt(totDis);
   document.getElementById('total-no-disponible').textContent = fmt(totInv);
   document.getElementById('total-deudas').textContent = fmt(totDeu);
