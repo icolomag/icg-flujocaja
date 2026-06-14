@@ -2191,8 +2191,10 @@ function renderFlujos(flujos) {
 
   if (nivelPpto !== 'resumen') {
     // Ingresos y egresos, separados
-    const gruposIng = Object.entries(op.grupos).filter(([,g]) => g.tipo === 'ingreso');
-    const gruposEgr = Object.entries(op.grupos).filter(([,g]) => g.tipo === 'egreso');
+    const gruposIng = Object.entries(op.grupos).filter(([,g]) => g.tipo === 'ingreso')
+      .sort(([,a], [,b]) => (b.total || 0) - (a.total || 0));
+    const gruposEgr = Object.entries(op.grupos).filter(([,g]) => g.tipo === 'egreso')
+      .sort(([,a], [,b]) => (b.total || 0) - (a.total || 0));
 
     if (gruposIng.length) {
       html += `<div class="flujo-subtitulo">Ingresos</div>`;
