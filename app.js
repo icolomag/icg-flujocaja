@@ -449,7 +449,7 @@ async function cargarDatos() {
   try {
     const [filasProductos, filasGrupos, filasTx, filasPpto, filasContexto, filasConfig, filasCuotas] = await Promise.all([
       leerHoja('Productos!A2:P'),
-      leerHoja('Grupos!A2:E'),
+      leerHoja('Grupos!A2:F'),
       leerHoja('Transacciones!A2:L'),
       leerHoja('Presupuesto!A2:F'),
       leerHoja('Contexto!A2:C'),
@@ -470,7 +470,7 @@ async function cargarDatos() {
       metodoAmortizacion: f[15] || ''
     }));
 
-    estado.grupos = filasGrupos.map(f => ({ tipo: f[0], grupo: f[1], subgrupo: f[2], cuentaDestino: f[3] || '', esCostoFinanciero: (f[4] || '').toString().toUpperCase() === 'SI' }));
+    estado.grupos = filasGrupos.map(f => ({ tipo: f[0], grupo: f[1], subgrupo: f[2], cuentaDestino: f[3] || '', esCostoFinanciero: (f[4] || '').toString().toUpperCase() === 'SI', esRendimientoLP: (f[5] || '').toString().toUpperCase() === 'SI' }));
     estado.transacciones = filasTx.map(f => ({
       id: f[0], fecha: f[1], tipo: f[2], grupo: f[3], subgrupo: f[4],
       origen: f[5], destino: f[6], monto: parseFloat(f[7]) || 0,
@@ -3225,10 +3225,16 @@ function calcularFlujoFinanciero(mesYYYYMM) {
     costoFinanciero: 0,
     neto: 0,
     detalle: { TC: { capital: 0, interes: 0 }, Credito: { capital: 0, interes: 0 } },
+    // Aportes a inversión LP (sale caja, NO es gasto — espejo del abono a capital)
+    // y retiros de inversión LP (entra caja — espejo del nuevo crédito).
+    aportesLP: 0,
+    retirosLP: 0,
     // Real (ejecutado desde Transacciones)
     abonoCapitalReal: 0,
     costoFinancieroReal: 0,
     nuevosCreditosReal: 0,
+    aportesLPReal: 0,
+    retirosLPReal: 0,
     netoReal: 0
   };
 
@@ -3261,11 +3267,22 @@ function calcularFlujoFinanciero(mesYYYYMM) {
       })
       .map(p => p.id);
 
+    // IDs de productos de inversión de largo plazo (tipo "Inversión LP" + no disponible).
+    // Reciben aportes desde la caja (P15 Cesantías, P16 FondoSura, P19 XTB).
+    const idsInversionLP = estado.productos
+      .filter(p => {
+        const t = (p.tipo || '').toLowerCase();
+        return !p.disponible && (t.includes('inversión') || t.includes('inversion'));
+      })
+      .map(p => p.id);
+
     estado.transacciones.forEach(t => {
       if (!t.fecha || t.fecha.substring(0, 7) !== mesYYYYMM) return;
 
       const origenEsDeuda = idsDeuda.includes(t.origen);
       const destinoEsDeuda = idsDeuda.includes(t.destino);
+      const origenEsLP = idsInversionLP.includes(t.origen);
+      const destinoEsLP = idsInversionLP.includes(t.destino);
 
       // Abono a capital real: traslado cuyo destino es un producto de deuda
       // (y el origen NO es deuda, para no contar traslados entre deudas)
@@ -3279,6 +3296,19 @@ function calcularFlujoFinanciero(mesYYYYMM) {
         res.nuevosCreditosReal += t.monto;
       }
 
+      // Aporte a inversión LP real: traslado cuyo DESTINO es inversión LP
+      // (y el origen NO es LP, para no contar traslados entre fondos LP).
+      // Sale de la caja disponible hacia el largo plazo.
+      if (t.tipo === 'Traslado' && destinoEsLP && !origenEsLP) {
+        res.aportesLPReal += t.monto;
+      }
+
+      // Retiro de inversión LP real: traslado cuyo ORIGEN es inversión LP
+      // (y el destino NO es LP). Entra a la caja disponible (ej. retiro del bache).
+      if (t.tipo === 'Traslado' && origenEsLP && !destinoEsLP) {
+        res.retirosLPReal += t.monto;
+      }
+
       // Costo financiero real: transacción con subgrupo marcado Es_Costo_Financiero
       const g = estado.grupos.find(x => x.grupo === t.grupo && x.subgrupo === t.subgrupo);
       if (g && g.esCostoFinanciero) {
@@ -3286,7 +3316,8 @@ function calcularFlujoFinanciero(mesYYYYMM) {
       }
     });
   }
-  res.netoReal = res.nuevosCreditosReal - res.abonoCapitalReal - res.costoFinancieroReal;
+  res.netoReal = res.nuevosCreditosReal + res.retirosLPReal
+               - res.abonoCapitalReal - res.costoFinancieroReal - res.aportesLPReal;
 
   return res;
 }
