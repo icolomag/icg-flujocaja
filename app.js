@@ -2699,11 +2699,17 @@ async function guardarCierre() {
     const filas = await leerHoja('Productos!A2:O');
 
     for (const a of actualizaciones) {
-      // Para inversión: registrar el rendimiento como ingreso/pérdida
+      // Para inversión: registrar el rendimiento como ingreso/pérdida.
+      // CP (producto disponible) → subgrupo "Rendimientos financieros CP" (operativo, toca caja).
+      // LP (producto no disponible) → subgrupo "Rendimientos financieros LP" (financiero,
+      //    no toca caja; el motor lo reinvierte como aporte LP automáticamente).
       if (a.tipo === 'inversion' && Math.abs(a.rendimiento) > 0) {
+        const prodInv = estado.productos.find(p => p.id === a.id);
+        const esLP = prodInv && !prodInv.disponible;
+        const subgrupoRend = esLP ? 'Rendimientos financieros LP' : 'Rendimientos financieros CP';
         await escribirFila('Transacciones', [
           'TX' + Date.now() + Math.floor(Math.random()*100),
-          fechaCierre, 'Ingreso', 'Ingresos', 'Rendimientos financieros',
+          fechaCierre, 'Ingreso', 'Ingresos', subgrupoRend,
           a.id, '', a.rendimiento, `Rendimiento ${a.nombre} - cierre ${mes}`, 'Cierre', 'TRUE', ''
         ]);
       }
@@ -3235,6 +3241,7 @@ function calcularFlujoFinanciero(mesYYYYMM) {
     nuevosCreditosReal: 0,
     aportesLPReal: 0,
     retirosLPReal: 0,
+    rendimientoLPReal: 0,
     netoReal: 0
   };
 
@@ -3296,16 +3303,25 @@ function calcularFlujoFinanciero(mesYYYYMM) {
         res.nuevosCreditosReal += t.monto;
       }
 
-      // Aporte a inversión LP real: traslado cuyo DESTINO es inversión LP
-      // (y el origen NO es LP, para no contar traslados entre fondos LP).
-      // Sale de la caja disponible hacia el largo plazo.
+      // --- INVERSIÓN LP ---
+      // Principio: cualquier plata que ENTRA a un producto Inversión LP genera
+      // "Aporte inversión LP"; cualquier plata que SALE de él genera "Retiro inversión LP".
+      // La entrada puede venir como Traslado (campo destino) o como Ingreso (el producto
+      // queda en el campo origen). La salida, como Traslado (origen) o Egreso (origen).
+
+      // Aporte LP: traslado con DESTINO un fondo LP (origen no LP),
+      // o un INGRESO cuyo producto (en origen) es un fondo LP.
       if (t.tipo === 'Traslado' && destinoEsLP && !origenEsLP) {
+        res.aportesLPReal += t.monto;
+      } else if (t.tipo === 'Ingreso' && origenEsLP) {
         res.aportesLPReal += t.monto;
       }
 
-      // Retiro de inversión LP real: traslado cuyo ORIGEN es inversión LP
-      // (y el destino NO es LP). Entra a la caja disponible (ej. retiro del bache).
+      // Retiro LP: traslado con ORIGEN un fondo LP (destino no LP),
+      // o un EGRESO cuyo producto (en origen) es un fondo LP.
       if (t.tipo === 'Traslado' && origenEsLP && !destinoEsLP) {
+        res.retirosLPReal += t.monto;
+      } else if (t.tipo === 'Egreso' && origenEsLP) {
         res.retirosLPReal += t.monto;
       }
 
@@ -3313,6 +3329,13 @@ function calcularFlujoFinanciero(mesYYYYMM) {
       const g = estado.grupos.find(x => x.grupo === t.grupo && x.subgrupo === t.subgrupo);
       if (g && g.esCostoFinanciero) {
         res.costoFinancieroReal += t.monto;
+      }
+
+      // Rendimiento LP real: ingreso con subgrupo marcado Es_Rendimiento_LP.
+      // Se muestra en el financiero (no en operativo). Su contrapartida de aporte
+      // ya quedó contada arriba (el rendimiento entra a un producto LP).
+      if (g && g.esRendimientoLP) {
+        res.rendimientoLPReal += t.monto;
       }
     });
   }
