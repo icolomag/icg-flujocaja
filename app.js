@@ -2224,6 +2224,12 @@ function renderFlujos(flujos) {
     html += renderLineaFin('Nuevos créditos', fin.nuevosCreditos, fin.nuevosCreditosReal, 'entra');
     html += renderLineaFin('Abonos a capital', -fin.abonoCapital, -fin.abonoCapitalReal, 'sale');
     html += renderLineaFin('Costo financiero', -fin.costoFinanciero, -fin.costoFinancieroReal, 'sale');
+
+    // Separador y líneas de inversión LP (solo real; no se proyectan).
+    html += `<div class="flujo-fila" style="border-top:1px dashed var(--borde,#ccc);margin-top:4px;padding-top:6px"><div class="concepto" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--texto2)">inversión LP</div><div class="num"></div><div class="num"></div><div class="num"></div></div>`;
+    html += renderLineaFin('Retiros inversión LP', 0, fin.retirosLPReal, 'entra');
+    html += renderLineaFin('Aportes inversión LP', 0, -fin.aportesLPReal, 'sale');
+    html += renderLineaFin('Rendimientos LP', 0, fin.rendimientoLPReal, 'entra');
   }
 
   // ── FLUJO NETO ── (en real, coherente con la tarjeta de arriba)
