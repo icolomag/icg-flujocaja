@@ -399,43 +399,56 @@ async function confirmarCorreo(gmailId) {
     mostrarToast('🔒 No se puede registrar: la fecha pertenece a un mes ya cerrado');
     return;
   }
-  mostrarSpinner(true);
-  const datosTx = {
-    fecha: c.fecha, tipo: c.tipo, grupo, subgrupo,
-    producto, monto: c.monto, descripcion, fuente: 'Gmail', notas: c.gmailId,
-    numCuotas: 1, primeraCuota: '', conInteres: false
-  };
-  // ¿Es pago de deuda? (el subgrupo apunta a una TC/deuda vía Cuenta_Destino)
-  const gSel = estado.grupos.find(x => x.grupo === grupo && x.subgrupo === subgrupo);
-  const esPagoDeuda = gSel && gSel.cuentaDestino;
-  const interes = esPagoDeuda
-    ? (Number(document.getElementById(`correo-int-${gmailId}`)?.value) || 0)
-    : 0;
 
-  let r;
-  if (esPagoDeuda) {
-    // Pago de deuda: partir en capital (traslado) + interés (costo financiero)
-    r = await registrarPagoDeudaPartido(datosTx, interes);
-    if (r.destino) {
-      const prodDestino = estado.productos.find(p => p.id === r.destino);
-      if (prodDestino && prodDestino.tipo === 'Tarjeta Crédito') {
-        await marcarCuotasPagoExtracto(r.destino, r.idTxCapital, c.fecha);
+  // Blindaje contra doble clic: el botón "Registrar" vive dentro del bloque del correo
+  const btn = document.querySelector(`#correo-${gmailId} .btn-confirmar`);
+  const textoOrig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+
+  mostrarSpinner(true);
+  try {
+    const datosTx = {
+      fecha: c.fecha, tipo: c.tipo, grupo, subgrupo,
+      producto, monto: c.monto, descripcion, fuente: 'Gmail', notas: c.gmailId,
+      numCuotas: 1, primeraCuota: '', conInteres: false
+    };
+    // ¿Es pago de deuda? (el subgrupo apunta a una TC/deuda vía Cuenta_Destino)
+    const gSel = estado.grupos.find(x => x.grupo === grupo && x.subgrupo === subgrupo);
+    const esPagoDeuda = gSel && gSel.cuentaDestino;
+    const interes = esPagoDeuda
+      ? (Number(document.getElementById(`correo-int-${gmailId}`)?.value) || 0)
+      : 0;
+
+    let r;
+    if (esPagoDeuda) {
+      // Pago de deuda: partir en capital (traslado) + interés (costo financiero)
+      r = await registrarPagoDeudaPartido(datosTx, interes);
+      if (r.destino) {
+        const prodDestino = estado.productos.find(p => p.id === r.destino);
+        if (prodDestino && prodDestino.tipo === 'Tarjeta Crédito') {
+          await marcarCuotasPagoExtracto(r.destino, r.idTxCapital, c.fecha);
+        }
+      }
+    } else {
+      // Movimiento normal (no es pago de deuda)
+      r = construirFilaTx(datosTx);
+      await escribirFila('Transacciones', r.fila);
+      const prodSel = estado.productos.find(p => p.id === producto);
+      if (!r.esTraslado && prodSel && prodSel.tipo === 'Tarjeta Crédito') {
+        await generarCuotasTC(r.idTx, datosTx);
       }
     }
-  } else {
-    // Movimiento normal (no es pago de deuda)
-    r = construirFilaTx(datosTx);
-    await escribirFila('Transacciones', r.fila);
-    const prodSel = estado.productos.find(p => p.id === producto);
-    if (!r.esTraslado && prodSel && prodSel.tipo === 'Tarjeta Crédito') {
-      await generarCuotasTC(r.idTx, datosTx);
-    }
+    await cargarDatos();
+    mostrarSpinner(false);
+    mostrarToast(r.esTraslado ? '✓ Pago de TC registrado desde Gmail' : '✓ Transacción registrada desde Gmail');
+    document.getElementById(`correo-${gmailId}`)?.remove();
+    estado.correosPendientes = estado.correosPendientes.filter(x => x.gmailId !== gmailId);
+  } catch(e) {
+    mostrarSpinner(false);
+    if (btn) { btn.disabled = false; btn.textContent = textoOrig; }
+    mostrarToast('Error registrando desde Gmail: ' + e.message);
+    console.error(e);
   }
-  await cargarDatos();
-  mostrarSpinner(false);
-  mostrarToast(r.esTraslado ? '✓ Pago de TC registrado desde Gmail' : '✓ Transacción registrada desde Gmail');
-  document.getElementById(`correo-${gmailId}`)?.remove();
-  estado.correosPendientes = estado.correosPendientes.filter(x => x.gmailId !== gmailId);
 }
 
 function descartarCorreo(gmailId) {
@@ -1677,42 +1690,54 @@ async function registrarMovimientoImagen(i) {
     return;
   }
 
-  mostrarSpinner(true);
-  const datosTx = {
-    fecha: m.fecha, tipo: m.tipo, grupo, subgrupo,
-    producto, monto: m.monto, descripcion, fuente: 'Imagen', notas: '',
-    numCuotas: 1, primeraCuota: '', conInteres: false
-  };
-  // ¿Es pago de deuda? (el subgrupo apunta a una TC/deuda vía Cuenta_Destino)
-  const gSel = estado.grupos.find(x => x.grupo === grupo && x.subgrupo === subgrupo);
-  const esPagoDeuda = gSel && gSel.cuentaDestino;
-  const interes = esPagoDeuda
-    ? (Number(document.getElementById(`img-int-${i}`)?.value) || 0)
-    : 0;
+  // Blindaje contra doble clic: el botón "Registrar" vive dentro del bloque del movimiento
+  const btn = document.querySelector(`#img-mov-${i} .btn-confirmar`);
+  const textoOrig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
 
-  let r;
-  if (esPagoDeuda) {
-    // Pago de deuda: partir en capital (traslado) + interés (costo financiero)
-    r = await registrarPagoDeudaPartido(datosTx, interes);
-    if (r.destino) {
-      const prodDestino = estado.productos.find(p => p.id === r.destino);
-      if (prodDestino && prodDestino.tipo === 'Tarjeta Crédito') {
-        await marcarCuotasPagoExtracto(r.destino, r.idTxCapital, m.fecha);
+  mostrarSpinner(true);
+  try {
+    const datosTx = {
+      fecha: m.fecha, tipo: m.tipo, grupo, subgrupo,
+      producto, monto: m.monto, descripcion, fuente: 'Imagen', notas: '',
+      numCuotas: 1, primeraCuota: '', conInteres: false
+    };
+    // ¿Es pago de deuda? (el subgrupo apunta a una TC/deuda vía Cuenta_Destino)
+    const gSel = estado.grupos.find(x => x.grupo === grupo && x.subgrupo === subgrupo);
+    const esPagoDeuda = gSel && gSel.cuentaDestino;
+    const interes = esPagoDeuda
+      ? (Number(document.getElementById(`img-int-${i}`)?.value) || 0)
+      : 0;
+
+    let r;
+    if (esPagoDeuda) {
+      // Pago de deuda: partir en capital (traslado) + interés (costo financiero)
+      r = await registrarPagoDeudaPartido(datosTx, interes);
+      if (r.destino) {
+        const prodDestino = estado.productos.find(p => p.id === r.destino);
+        if (prodDestino && prodDestino.tipo === 'Tarjeta Crédito') {
+          await marcarCuotasPagoExtracto(r.destino, r.idTxCapital, m.fecha);
+        }
+      }
+    } else {
+      // Movimiento normal (no es pago de deuda)
+      r = construirFilaTx(datosTx);
+      await escribirFila('Transacciones', r.fila);
+      const prodSel = estado.productos.find(p => p.id === producto);
+      if (!r.esTraslado && prodSel && prodSel.tipo === 'Tarjeta Crédito') {
+        await generarCuotasTC(r.idTx, datosTx);
       }
     }
-  } else {
-    // Movimiento normal (no es pago de deuda)
-    r = construirFilaTx(datosTx);
-    await escribirFila('Transacciones', r.fila);
-    const prodSel = estado.productos.find(p => p.id === producto);
-    if (!r.esTraslado && prodSel && prodSel.tipo === 'Tarjeta Crédito') {
-      await generarCuotasTC(r.idTx, datosTx);
-    }
+    await cargarDatos();
+    mostrarSpinner(false);
+    mostrarToast(r.esTraslado ? '✓ Pago de TC registrado' : '✓ Movimiento registrado');
+    document.getElementById(`img-mov-${i}`).remove();
+  } catch(e) {
+    mostrarSpinner(false);
+    if (btn) { btn.disabled = false; btn.textContent = textoOrig; }
+    mostrarToast('Error registrando desde Imagen: ' + e.message);
+    console.error(e);
   }
-  await cargarDatos();
-  mostrarSpinner(false);
-  mostrarToast(r.esTraslado ? '✓ Pago de TC registrado' : '✓ Movimiento registrado');
-  document.getElementById(`img-mov-${i}`).remove();
 }
 
 function descartarMovimientoImagen(i) {
@@ -2426,6 +2451,9 @@ function calcularNeto() {
 }
 
 async function guardarNomina() {
+  const btn = document.getElementById('btn-nom-guardar');
+  const textoOrig = btn.textContent;
+
   const fecha = document.getElementById('nom-fecha').value;
   const cuentaDestino = document.getElementById('nom-cuenta').value;
   const bruto = parseFloat(document.getElementById('nom-bruto').value) || 0;
@@ -2434,6 +2462,9 @@ async function guardarNomina() {
     mostrarToast('Completa fecha, cuenta y salario bruto');
     return;
   }
+
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
 
   // Recolectar descuentos
   const descuentos = [];
@@ -2499,11 +2530,13 @@ async function guardarNomina() {
 
     await cargarDatos();
     mostrarSpinner(false);
+    btn.disabled = false; btn.textContent = textoOrig;
     mostrarToast('✓ Nómina registrada — neto: ' + fmt(neto));
     resetNomina();
     cambiarVista('dashboard');
   } catch(e) {
     mostrarSpinner(false);
+    btn.disabled = false; btn.textContent = textoOrig;
     mostrarToast('Error registrando nómina: ' + e.message);
     console.error(e);
   }
@@ -2700,6 +2733,11 @@ async function guardarCierre() {
 
   if (!confirm(`Vas a cerrar ${mes}. Después de esto, las transacciones de ese mes y anteriores quedarán bloqueadas. ¿Continuar?`)) return;
 
+  const btn = document.getElementById('btn-cierre-guardar');
+  const textoOrig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
   mostrarSpinner(true);
   try {
     const filas = await leerHoja('Productos!A2:O');
@@ -2760,11 +2798,13 @@ async function guardarCierre() {
     await cargarDatos();
     await recalcularSaldos(true);
     mostrarSpinner(false);
+    btn.disabled = false; btn.textContent = textoOrig;
     mostrarToast(`✓ Mes ${mes} cerrado correctamente`);
     resetCierre();
     cambiarVista('dashboard');
   } catch(e) {
     mostrarSpinner(false);
+    btn.disabled = false; btn.textContent = textoOrig;
     mostrarToast('Error en cierre: ' + e.message);
     console.error(e);
   }
