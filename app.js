@@ -461,7 +461,7 @@ async function cargarDatos() {
   mostrarSpinner(true);
   try {
     const [filasProductos, filasGrupos, filasTx, filasPpto, filasContexto, filasConfig, filasCuotas] = await Promise.all([
-      leerHoja('Productos!A2:P'),
+      leerHoja('Productos!A2:Q'),
       leerHoja('Grupos!A2:F'),
       leerHoja('Transacciones!A2:L'),
       leerHoja('Presupuesto!A2:F'),
@@ -480,7 +480,8 @@ async function cargarDatos() {
       disponible: f[11] === 'TRUE', estado: f[12] || 'Activa',
       comentarios: f[13] || '',
       saldoCierre: parseFloat(f[14]) || 0,
-      metodoAmortizacion: f[15] || ''
+      metodoAmortizacion: f[15] || '',
+      tipoTasa: f[16] || ''
     }));
 
     estado.grupos = filasGrupos.map(f => ({ tipo: f[0], grupo: f[1], subgrupo: f[2], cuentaDestino: f[3] || '', esCostoFinanciero: (f[4] || '').toString().toUpperCase() === 'SI', esRendimientoLP: (f[5] || '').toString().toUpperCase() === 'SI' }));
@@ -988,9 +989,10 @@ function configurarFormularios() {
         const metodo = normalizarMetodoAmortizacion(prod ? prod.metodoAmortizacion : '');
         const ayudaM = document.getElementById('tx-metodo-ayuda');
         if (ayudaM) {
-          ayudaM.textContent = metodo === 'aleman'
-            ? 'Este producto amortiza con método alemán (cuota decreciente).'
-            : 'Este producto amortiza con método francés (cuota fija).';
+          const tasaTxt = 'El % que escribas se interpreta como ' + etiquetaTipoTasa(prod ? prod.tipoTasa : '') + '.';
+          ayudaM.textContent = (metodo === 'aleman'
+            ? 'Este producto amortiza con método alemán (cuota decreciente). '
+            : 'Este producto amortiza con método francés (cuota fija). ') + tasaTxt;
         }
       }
     });
@@ -1015,9 +1017,10 @@ function configurarFormularios() {
       const ayudaM = document.getElementById('tr-metodo-ayuda');
       if (ayudaM) {
         const metodo = normalizarMetodoAmortizacion(prod.metodoAmortizacion);
-        ayudaM.textContent = metodo === 'aleman'
-          ? 'Esta tarjeta amortiza con método alemán (cuota decreciente).'
-          : 'Esta tarjeta amortiza con método francés (cuota fija).';
+        const tasaTxt = 'El % que escribas se interpreta como ' + etiquetaTipoTasa(prod.tipoTasa) + '.';
+        ayudaM.textContent = (metodo === 'aleman'
+          ? 'Esta tarjeta amortiza con método alemán (cuota decreciente). '
+          : 'Esta tarjeta amortiza con método francés (cuota fija). ') + tasaTxt;
       }
     }
   }
@@ -1049,6 +1052,7 @@ function actualizarAvisoDeudaTx() {
 function leerFormTx() {
   const diferir = document.getElementById('tx-diferir');
   const esDiferido = diferir && diferir.checked;
+  const prodTx = estado.productos.find(p => p.id === document.getElementById('tx-producto').value);
   return {
     fecha: document.getElementById('tx-fecha').value,
     tipo: document.getElementById('tx-tipo').value,
@@ -1062,7 +1066,7 @@ function leerFormTx() {
     primeraCuota: esDiferido ? document.getElementById('tx-primera-cuota').value : '',
     conInteres: esDiferido ? document.getElementById('tx-con-interes').checked : false,
     tasaPct: esDiferido ? (parseFloat(document.getElementById('tx-tasa-pct').value) || 0) : 0,
-    tasaTipo: esDiferido ? document.getElementById('tx-tasa-tipo').value : 'mensual'
+    tasaTipo: normalizarTipoTasa(prodTx ? prodTx.tipoTasa : '')
   };
 }
 
@@ -1079,7 +1083,7 @@ function leerFormTr() {
     esDisposicion: esDisposicion,
     numCuotas: parseInt(document.getElementById('tr-num-cuotas').value) || 1,
     tasaPct: parseFloat(document.getElementById('tr-tasa-pct').value) || 0,
-    tasaTipo: document.getElementById('tr-tasa-tipo').value,
+    tasaTipo: normalizarTipoTasa(prodOrigen ? prodOrigen.tipoTasa : ''),
     primeraCuota: document.getElementById('tr-primera-cuota').value
   };
 }
@@ -3052,6 +3056,31 @@ function normalizarMetodoAmortizacion(valor) {
   const v = (valor || '').toString().trim().toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // quita tildes
   return v === 'aleman' ? 'aleman' : 'frances';
+}
+
+// Normaliza el tipo de tasa leído de la hoja Productos (columna Tipo_Tasa).
+// Tolerante a mayúsculas/tildes y a variantes comunes:
+//   "Mensual", "mensual" → 'mensual'
+//   "E.A.", "EA", "ea"   → 'ea'
+//   "N.M.V.", "NMV"      → 'nmv'
+// Cualquier otro valor (incluido vacío) → 'ea' (fallback: las tasas de crédito
+// suelen publicarse como efectiva anual).
+function normalizarTipoTasa(valor) {
+  const v = (valor || '').toString().trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // quita tildes
+    .replace(/[.\s]/g, '');                           // quita puntos y espacios: "e.a." → "ea"
+  if (v === 'mensual') return 'mensual';
+  if (v === 'nmv') return 'nmv';
+  return 'ea';
+}
+
+// Etiqueta legible del tipo de tasa, para los textos de ayuda del front.
+function etiquetaTipoTasa(tipo) {
+  switch (normalizarTipoTasa(tipo)) {
+    case 'mensual': return 'mensual efectiva';
+    case 'nmv':     return 'N.M.V. (nominal mes vencido)';
+    default:        return 'E.A. (efectiva anual)';
+  }
 }
 
 // DESPACHADOR: punto único de cálculo de tablas de amortización.
