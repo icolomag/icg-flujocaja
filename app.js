@@ -1379,7 +1379,7 @@ async function registrarAbonoTC() {
     }
     await escribirFila('Transacciones', [
       idTx, fecha, 'Traslado', grupoPago.grupo, grupoPago.subgrupo,
-      origenId, tcId, montoTotal, 'Abono anticipado a TC', 'Manual', 'TRUE', ''
+      origenId, tcId, montoTotal, 'Abono anticipado a TC', 'Manual', 'TRUE', '', grupoPago.idSubgrupo || ''
     ]);
 
     await cargarDatos();
@@ -2773,24 +2773,27 @@ async function guardarCierre() {
         const prodInv = estado.productos.find(p => p.id === a.id);
         const esLP = prodInv && !prodInv.disponible;
         const subgrupoRend = esLP ? 'Rendimientos financieros LP' : 'Rendimientos financieros CP';
+        const gRend = estado.grupos.find(x => x.subgrupo === subgrupoRend);
         await escribirFila('Transacciones', [
           'TX' + Date.now() + Math.floor(Math.random()*100),
           fechaCierre, 'Ingreso', 'Ingresos', subgrupoRend,
-          a.id, '', a.rendimiento, `Rendimiento ${a.nombre} - cierre ${mes}`, 'Cierre', 'TRUE', ''
+          a.id, '', a.rendimiento, `Rendimiento ${a.nombre} - cierre ${mes}`, 'Cierre', 'TRUE', '', gRend ? gRend.idSubgrupo : ''
         ]);
       }
 
       // Para cuenta con diferencia en modo "ajuste": registrar transacción de ajuste
       if (a.tipo === 'cuenta' && Math.abs(a.diferencia) >= 1 && modoDif === 'ajuste') {
         const esIngreso = a.diferencia > 0;
+        const subAjuste = esIngreso ? 'Otros ingresos' : 'Ajuste de conciliación';
+        const gAjuste = estado.grupos.find(x => x.subgrupo === subAjuste);
         await escribirFila('Transacciones', [
           'TX' + Date.now() + Math.floor(Math.random()*100),
           fechaCierre,
           esIngreso ? 'Ingreso' : 'Egreso',
           esIngreso ? 'Ingresos' : 'Otros egresos',
-          esIngreso ? 'Otros ingresos' : 'Ajuste de conciliación',
+          subAjuste,
           a.id, '', Math.abs(a.diferencia),
-          `Ajuste conciliación cierre ${mes}`, 'Cierre', 'TRUE', ''
+          `Ajuste conciliación cierre ${mes}`, 'Cierre', 'TRUE', '', gAjuste ? gAjuste.idSubgrupo : ''
         ]);
       }
     }
