@@ -658,6 +658,33 @@ function calcularGMF(idProducto, monto) {
   return Math.round(m * TASA_GMF);
 }
 
+// Genera y ESCRIBE un movimiento de GMF si corresponde. Se llama desde los
+// flujos donde sale plata real de una cuenta (egreso, split, pago de deuda,
+// traslado de salida, nómina). Escribe un Egreso al subgrupo "Gastos bancarios".
+// Devuelve el valor del GMF registrado (0 si no aplicaba).
+// NOTA: la app genera el GMF siempre que la salida sea de cuenta no exenta;
+// si en un caso puntual no aplicaba (ej. traslado a cuenta propia sin cobro),
+// Nacho lo elimina del Historial.
+async function generarGMF(idProducto, monto, fecha, descripcion, fuente) {
+  const valor = calcularGMF(idProducto, monto);
+  if (valor <= 0) return 0;
+
+  const gGB = estado.grupos.find(x => x.subgrupo === 'Gastos bancarios');
+  if (!gGB) {
+    mostrarToast('⚠️ No encontré el subgrupo "Gastos bancarios" en Grupos. El GMF NO se registró.');
+    return 0;
+  }
+
+  const idTx = 'GMF' + Date.now();
+  const fila = [
+    idTx, fecha, 'Egreso', gGB.grupo, 'Gastos bancarios',
+    idProducto, '', valor,
+    'GMF 4x1000 — ' + (descripcion || ''), (fuente || 'GMF'), 'TRUE', '', gGB.idSubgrupo || ''
+  ];
+  await escribirFila('Transacciones', fila);
+  return valor;
+}
+
 // ── SPLIT DE DÉBITO: distribuir un egreso en varios subgrupos ──────────
 // Estado del panel de distribución (renglones en memoria)
 let splitFilas = [];
@@ -811,8 +838,12 @@ async function guardarSplit() {
       const r = construirFilaTx(datos);
       await escribirFila('Transacciones', r.fila);
     }
+    // GMF una sola vez sobre el TOTAL que salió de la cuenta (no por renglón)
+    const gmfSplit = await generarGMF(producto, total, fecha, descripcion, 'Manual-Split');
     await cargarDatos();
-    mostrarToast(`✓ Distribución registrada (${splitFilas.length} movimientos)`);
+    mostrarToast(gmfSplit > 0
+      ? `✓ Distribución registrada (${splitFilas.length} mov.) + GMF ${fmt(gmfSplit)}`
+      : `✓ Distribución registrada (${splitFilas.length} movimientos)`);
     cerrarSplit();
     resetFormTx();
     cambiarVista('dashboard');
@@ -1235,9 +1266,14 @@ function configurarFormularios() {
         await marcarCuotasPagoExtracto(r.destino, r.idTx, datos.fecha);
       }
     }
+    // GMF si la salida es desde una cuenta de ahorros no exenta
+    // (calcularGMF devuelve 0 si el origen es una TC o cuenta exenta)
+    const gmfTx = await generarGMF(datos.producto, datos.monto, datos.fecha, datos.descripcion, 'Manual');
     await cargarDatos();
     mostrarSpinner(false);
-    mostrarToast(r.esTraslado ? '✓ Pago de TC registrado' : '✓ Transacción registrada');
+    let msgTx = r.esTraslado ? '✓ Pago de TC registrado' : '✓ Transacción registrada';
+    if (gmfTx > 0) msgTx += ` + GMF ${fmt(gmfTx)}`;
+    mostrarToast(msgTx);
     resetFormTx();
     cambiarVista('dashboard');
   });
