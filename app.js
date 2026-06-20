@@ -325,15 +325,19 @@ function renderCorreosPendientes(correos) {
       <div class="correo-asunto">${c.textoPreview}</div>
       <div class="correo-monto">${fmt(c.monto)}</div>
       <div class="correo-campos">
-        <select class="correo-select" id="correo-prod-${c.gmailId}" onchange="avisoCuotaTC('${c.gmailId}')">${optsProductos}</select>
-        <select class="correo-select" id="correo-grupo-${c.gmailId}" onchange="actualizarSubgruposCorreo('${c.gmailId}')">${optsGrupos}</select>
-        <select class="correo-select" id="correo-sub-${c.gmailId}" onchange="revisarInteresCorreo('${c.gmailId}')"></select>
-        <input class="correo-input" id="correo-desc-${c.gmailId}" type="text" placeholder="Descripción" value="${c.asunto.substring(0,50)}" />
-        <div class="aviso-cuota-tc oculto" id="correo-aviso-${c.gmailId}" style="font-size:0.85em;color:#0a7;margin-top:4px;">ℹ️ Se registrará a 1 cuota. Para diferir, usa +Transacción.</div>
-        <div class="campo-interes-deuda oculto" id="correo-int-bloque-${c.gmailId}" style="margin-top:6px;">
-          <label style="font-size:0.85em;color:var(--texto2)">Interés incluido en el pago (si aplica):</label>
-          <input class="correo-input" id="correo-int-${c.gmailId}" type="number" min="0" value="0" placeholder="0" />
+        <div id="campos-normales-gmail-${c.gmailId}">
+          <select class="correo-select" id="correo-prod-${c.gmailId}" onchange="avisoCuotaTC('${c.gmailId}')">${optsProductos}</select>
+          <select class="correo-select" id="correo-grupo-${c.gmailId}" onchange="actualizarSubgruposCorreo('${c.gmailId}')">${optsGrupos}</select>
+          <select class="correo-select" id="correo-sub-${c.gmailId}" onchange="revisarInteresCorreo('${c.gmailId}')"></select>
+          <input class="correo-input" id="correo-desc-${c.gmailId}" type="text" placeholder="Descripción" value="${c.asunto.substring(0,50)}" />
+          <div class="aviso-cuota-tc oculto" id="correo-aviso-${c.gmailId}" style="font-size:0.85em;color:#0a7;margin-top:4px;">ℹ️ Se registrará a 1 cuota. Para diferir, usa +Transacción.</div>
+          <div class="campo-interes-deuda oculto" id="correo-int-bloque-${c.gmailId}" style="margin-top:6px;">
+            <label style="font-size:0.85em;color:var(--texto2)">Interés incluido en el pago (si aplica):</label>
+            <input class="correo-input" id="correo-int-${c.gmailId}" type="number" min="0" value="0" placeholder="0" />
+          </div>
         </div>
+        ${c.tipo === 'Egreso' ? `<button type="button" class="btn-secundario" style="margin-top:6px; padding:4px 10px; font-size:0.85em" id="btn-split-abrir-gmail-${c.gmailId}" onclick="abrirSplitTarjeta('gmail','${c.gmailId}',${c.monto})">➗ Distribuir en varios subgrupos</button>` : ''}
+        <div id="split-tarjeta-gmail-${c.gmailId}"></div>
       </div>
       ${cerrado ? '<div class="correo-cerrado-aviso">🔒 Fecha de un mes ya cerrado — no se puede registrar</div>' : ''}
       <div class="correo-acciones">
@@ -787,7 +791,205 @@ async function guardarSplit() {
   }
 }
 
-// ── HISTORIAL ─────────────────────────────────────────────────────────
+// ── SPLIT DE TARJETA: distribuir un movimiento de Gmail/Imagen ─────────
+// Comparte el modelo del split de +Transacción, pero el monto total es FIJO
+// (lo detectó el banco). Cada tarjeta maneja sus renglones por una clave única.
+// splitTarjetas[clave] = { total, filas: [{grupo, subgrupo, monto}] }
+let splitTarjetas = {};
+
+// Abre el split dentro de una tarjeta de Gmail o Imagen.
+// origen: 'gmail' | 'imagen'  ·  ref: gmailId (gmail) o índice i (imagen)  ·  total: monto fijo
+function abrirSplitTarjeta(origen, ref, total) {
+  const clave = `${origen}-${ref}`;
+  splitTarjetas[clave] = {
+    total: total,
+    filas: [{ grupo: '', subgrupo: '', monto: 0 }, { grupo: '', subgrupo: '', monto: 0 }]
+  };
+  renderSplitTarjeta(origen, ref);
+}
+
+// Cierra el split de una tarjeta sin guardar (vuelve a la vista normal de la tarjeta)
+function cerrarSplitTarjeta(origen, ref) {
+  const clave = `${origen}-${ref}`;
+  delete splitTarjetas[clave];
+  const cont = document.getElementById(`split-tarjeta-${origen}-${ref}`);
+  if (cont) cont.innerHTML = '';
+  // Reaparecer el botón de distribuir
+  const btnAbrir = document.getElementById(`btn-split-abrir-${origen}-${ref}`);
+  if (btnAbrir) btnAbrir.classList.remove('oculto');
+  // Reaparecer los campos normales de la tarjeta
+  const campos = document.getElementById(`campos-normales-${origen}-${ref}`);
+  if (campos) campos.classList.remove('oculto');
+}
+
+// Dibuja la grilla del split dentro de la tarjeta
+function renderSplitTarjeta(origen, ref) {
+  const clave = `${origen}-${ref}`;
+  const est = splitTarjetas[clave];
+  if (!est) return;
+  const cont = document.getElementById(`split-tarjeta-${origen}-${ref}`);
+  if (!cont) return;
+  // Ocultar el botón de abrir y los campos normales mientras el split está activo
+  const btnAbrir = document.getElementById(`btn-split-abrir-${origen}-${ref}`);
+  if (btnAbrir) btnAbrir.classList.add('oculto');
+  const campos = document.getElementById(`campos-normales-${origen}-${ref}`);
+  if (campos) campos.classList.add('oculto');
+
+  const grupos = splitGruposEgreso();
+  const filasHtml = est.filas.map((f, idx) => {
+    const optsGrupo = '<option value="">— Grupo —</option>' +
+      grupos.map(g => `<option value="${g}" ${g === f.grupo ? 'selected' : ''}>${g}</option>`).join('');
+    const subs = f.grupo ? splitSubgruposDe(f.grupo) : [];
+    const optsSub = '<option value="">— Subgrupo —</option>' +
+      subs.map(s => `<option value="${s}" ${s === f.subgrupo ? 'selected' : ''}>${s}</option>`).join('');
+    const puedeBorrar = est.filas.length > 1;
+    return `
+      <div style="display:grid; grid-template-columns:1fr 1fr 100px 30px; gap:5px; align-items:center; margin-bottom:5px">
+        <select class="correo-select" onchange="splitTarjetaCambiarGrupo('${origen}','${ref}',${idx},this.value)">${optsGrupo}</select>
+        <select class="correo-select" onchange="splitTarjetaCambiarSub('${origen}','${ref}',${idx},this.value)">${optsSub}</select>
+        <input class="correo-input" type="number" min="0" placeholder="0" value="${f.monto || ''}" oninput="splitTarjetaCambiarMonto('${origen}','${ref}',${idx},this.value)" />
+        ${puedeBorrar ? `<button type="button" class="btn-secundario" style="padding:3px 7px" onclick="splitTarjetaBorrarFila('${origen}','${ref}',${idx})">✕</button>` : '<span></span>'}
+      </div>`;
+  }).join('');
+
+  cont.innerHTML = `
+    <div style="border:1px solid var(--borde,#ddd); border-radius:8px; padding:10px; margin-top:8px; background:rgba(0,0,0,0.02)">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">
+        <strong style="font-size:0.9em">Distribuir ${fmt(est.total)} en varios subgrupos</strong>
+        <button type="button" class="btn-secundario" style="padding:3px 8px" onclick="cerrarSplitTarjeta('${origen}','${ref}')">✕ Cancelar</button>
+      </div>
+      ${filasHtml}
+      <button type="button" class="btn-secundario" style="margin-top:4px; padding:4px 10px" onclick="splitTarjetaAgregarFila('${origen}','${ref}')">+ Agregar renglón</button>
+      <div id="split-tarjeta-contador-${origen}-${ref}" style="margin-top:8px; font-weight:600; font-size:0.9em"></div>
+      <button type="button" class="btn-confirmar" style="margin-top:8px" id="btn-split-tarjeta-guardar-${origen}-${ref}" onclick="guardarSplitTarjeta('${origen}','${ref}')" disabled>✓ Guardar distribución</button>
+    </div>`;
+  actualizarSplitTarjetaContador(origen, ref);
+}
+
+function splitTarjetaCambiarGrupo(origen, ref, idx, val) {
+  const est = splitTarjetas[`${origen}-${ref}`];
+  if (!est) return;
+  est.filas[idx].grupo = val;
+  est.filas[idx].subgrupo = '';
+  renderSplitTarjeta(origen, ref);
+}
+function splitTarjetaCambiarSub(origen, ref, idx, val) {
+  const est = splitTarjetas[`${origen}-${ref}`];
+  if (est) est.filas[idx].subgrupo = val;
+}
+function splitTarjetaCambiarMonto(origen, ref, idx, val) {
+  const est = splitTarjetas[`${origen}-${ref}`];
+  if (!est) return;
+  est.filas[idx].monto = parseFloat(val) || 0;
+  actualizarSplitTarjetaContador(origen, ref);
+}
+function splitTarjetaBorrarFila(origen, ref, idx) {
+  const est = splitTarjetas[`${origen}-${ref}`];
+  if (!est) return;
+  est.filas.splice(idx, 1);
+  renderSplitTarjeta(origen, ref);
+}
+function splitTarjetaAgregarFila(origen, ref) {
+  const est = splitTarjetas[`${origen}-${ref}`];
+  if (!est) return;
+  est.filas.push({ grupo: '', subgrupo: '', monto: 0 });
+  renderSplitTarjeta(origen, ref);
+}
+
+function actualizarSplitTarjetaContador(origen, ref) {
+  const est = splitTarjetas[`${origen}-${ref}`];
+  if (!est) return;
+  const suma = est.filas.reduce((acc, f) => acc + (f.monto || 0), 0);
+  const dif = est.total - suma;
+  const cont = document.getElementById(`split-tarjeta-contador-${origen}-${ref}`);
+  const btn = document.getElementById(`btn-split-tarjeta-guardar-${origen}-${ref}`);
+  if (!cont || !btn) return;
+  let texto, color, ok;
+  if (dif > 0) {
+    texto = `Distribuido: ${fmt(suma)} de ${fmt(est.total)} — faltan ${fmt(dif)}`;
+    color = '#c0392b'; ok = false;
+  } else if (dif < 0) {
+    texto = `Distribuido: ${fmt(suma)} de ${fmt(est.total)} — sobran ${fmt(-dif)}`;
+    color = '#c0392b'; ok = false;
+  } else {
+    texto = `✓ Distribuido: ${fmt(suma)} de ${fmt(est.total)} — cuadra`;
+    color = '#27ae60'; ok = true;
+  }
+  cont.textContent = texto;
+  cont.style.color = color;
+  btn.disabled = !ok;
+}
+
+// Guarda la distribución de una tarjeta (Gmail o Imagen) como N egresos.
+async function guardarSplitTarjeta(origen, ref) {
+  const clave = `${origen}-${ref}`;
+  const est = splitTarjetas[clave];
+  if (!est) return;
+
+  // Recuperar el movimiento original (fecha, producto sugerido, descripción)
+  let fecha, descripcion, notas, fuente, idTarjeta;
+  if (origen === 'gmail') {
+    const c = estado.correosPendientes.find(x => x.gmailId === ref);
+    if (!c) { mostrarToast('No se encontró el correo'); return; }
+    fecha = c.fecha;
+    descripcion = document.getElementById(`correo-desc-${ref}`)?.value || c.asunto?.substring(0, 50) || '';
+    notas = ref; fuente = 'Gmail-Split'; idTarjeta = `correo-${ref}`;
+  } else {
+    const m = estado.movimientosImagen[ref];
+    if (!m) { mostrarToast('No se encontró el movimiento'); return; }
+    fecha = m.fecha;
+    descripcion = document.getElementById(`img-desc-${ref}`)?.value || m.descripcion || '';
+    notas = ''; fuente = 'Imagen-Split'; idTarjeta = `img-mov-${ref}`;
+  }
+
+  // El producto (cuenta) se toma del selector de la tarjeta
+  const producto = origen === 'gmail'
+    ? document.getElementById(`correo-prod-${ref}`)?.value
+    : document.getElementById(`img-prod-${ref}`)?.value;
+
+  if (!producto) { mostrarToast('Selecciona el producto (cuenta)'); return; }
+  if (esPeriodoCerrado(fecha)) {
+    mostrarToast('🔒 No se puede registrar: la fecha pertenece a un mes ya cerrado');
+    return;
+  }
+  for (let i = 0; i < est.filas.length; i++) {
+    const f = est.filas[i];
+    if (!f.grupo || !f.subgrupo) { mostrarToast(`Renglón ${i + 1}: falta grupo o subgrupo`); return; }
+    if (!f.monto || f.monto <= 0) { mostrarToast(`Renglón ${i + 1}: monto inválido`); return; }
+  }
+  const suma = est.filas.reduce((acc, f) => acc + (f.monto || 0), 0);
+  if (suma !== est.total) { mostrarToast('La suma de los renglones no cuadra con el total'); return; }
+
+  const btn = document.getElementById(`btn-split-tarjeta-guardar-${origen}-${ref}`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+  mostrarSpinner(true);
+  try {
+    for (const f of est.filas) {
+      const datos = {
+        fecha, tipo: 'Egreso', grupo: f.grupo, subgrupo: f.subgrupo,
+        producto, monto: f.monto, descripcion, notas, fuente
+      };
+      const r = construirFilaTx(datos);
+      await escribirFila('Transacciones', r.fila);
+    }
+    await cargarDatos();
+    mostrarSpinner(false);
+    mostrarToast(`✓ Distribución registrada (${est.filas.length} movimientos)`);
+    // Quitar la tarjeta y limpiar
+    document.getElementById(idTarjeta)?.remove();
+    if (origen === 'gmail') {
+      estado.correosPendientes = estado.correosPendientes.filter(x => x.gmailId !== ref);
+    }
+    delete splitTarjetas[clave];
+  } catch (e) {
+    mostrarSpinner(false);
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Guardar distribución'; }
+    mostrarToast('Error al guardar la distribución: ' + e.message);
+    console.error(e);
+  }
+}
+
+
 function renderHistorial(filtroTipo = '', filtroGrupo = '') {
   let txs = [...estado.transacciones].reverse();
   if (filtroTipo) txs = txs.filter(t => t.tipo === filtroTipo);
@@ -1805,15 +2007,19 @@ function renderMovimientosImagen(movimientos) {
     } else {
       accionesHtml = `
       <div class="movimiento-campos">
-        <select class="correo-select" id="img-prod-${i}" onchange="avisoCuotaTCImagen(${i})">${optsProductos}</select>
-        <select class="correo-select" id="img-grupo-${i}" onchange="actualizarSubgruposImagen(${i})">${optsGrupos}</select>
-        <select class="correo-select" id="img-sub-${i}" onchange="revisarInteresImagen(${i})"></select>
-        <input class="correo-input" id="img-desc-${i}" type="text" value="${m.descripcion}" />
-        <div class="aviso-cuota-tc oculto" id="img-aviso-${i}" style="font-size:0.85em;color:#0a7;margin-top:4px;">ℹ️ Se registrará a 1 cuota. Para diferir, usa +Transacción.</div>
-        <div class="campo-interes-deuda oculto" id="img-int-bloque-${i}" style="margin-top:6px;">
-          <label style="font-size:0.85em;color:var(--texto2)">Interés incluido en el pago (si aplica):</label>
-          <input class="correo-input" id="img-int-${i}" type="number" min="0" value="0" placeholder="0" />
+        <div id="campos-normales-imagen-${i}">
+          <select class="correo-select" id="img-prod-${i}" onchange="avisoCuotaTCImagen(${i})">${optsProductos}</select>
+          <select class="correo-select" id="img-grupo-${i}" onchange="actualizarSubgruposImagen(${i})">${optsGrupos}</select>
+          <select class="correo-select" id="img-sub-${i}" onchange="revisarInteresImagen(${i})"></select>
+          <input class="correo-input" id="img-desc-${i}" type="text" value="${m.descripcion}" />
+          <div class="aviso-cuota-tc oculto" id="img-aviso-${i}" style="font-size:0.85em;color:#0a7;margin-top:4px;">ℹ️ Se registrará a 1 cuota. Para diferir, usa +Transacción.</div>
+          <div class="campo-interes-deuda oculto" id="img-int-bloque-${i}" style="margin-top:6px;">
+            <label style="font-size:0.85em;color:var(--texto2)">Interés incluido en el pago (si aplica):</label>
+            <input class="correo-input" id="img-int-${i}" type="number" min="0" value="0" placeholder="0" />
+          </div>
         </div>
+        ${m.tipo === 'Egreso' ? `<button type="button" class="btn-secundario" style="margin-top:6px; padding:4px 10px; font-size:0.85em" id="btn-split-abrir-imagen-${i}" onclick="abrirSplitTarjeta('imagen',${i},${m.monto})">➗ Distribuir en varios subgrupos</button>` : ''}
+        <div id="split-tarjeta-imagen-${i}"></div>
       </div>
       <div class="movimiento-acciones">
         <button class="btn-confirmar" onclick="registrarMovimientoImagen(${i})">✓ Registrar</button>
