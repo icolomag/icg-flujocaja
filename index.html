@@ -183,6 +183,37 @@
               </div>
             </div>
           </div>
+
+          <!-- Botón para abrir el modo distribución (solo egresos) -->
+          <div id="tx-split-abrir-bloque" class="campo oculto">
+            <button id="btn-tx-split-abrir" type="button" class="btn-secundario">➗ Distribuir en varios subgrupos</button>
+          </div>
+
+          <!-- PANEL DE DISTRIBUCIÓN (split de un débito en varios subgrupos) -->
+          <div id="tx-split-panel" class="oculto" style="margin-top:14px; border:1px solid var(--borde, #ddd); border-radius:10px; padding:14px; background:rgba(0,0,0,0.02)">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px">
+              <strong>Distribuir el débito en varios subgrupos</strong>
+              <button id="btn-tx-split-cerrar" type="button" class="btn-secundario" style="padding:4px 10px">✕ Cerrar</button>
+            </div>
+            <p style="color:var(--texto2,#888); font-size:13px; margin:0 0 12px">
+              Un solo débito de la cuenta repartido en varios renglones. La fecha, la cuenta y la descripción se toman de arriba. La suma de los renglones debe cuadrar exacta con el total.
+            </p>
+            <div class="campo">
+              <label>Monto total del débito (COP)</label>
+              <input type="number" id="tx-split-total" placeholder="0" min="0" />
+            </div>
+
+            <div id="tx-split-filas"><!-- renglones generados por JS --></div>
+
+            <button id="btn-tx-split-agregar" type="button" class="btn-secundario" style="margin-top:8px">+ Agregar renglón</button>
+
+            <div id="tx-split-contador" style="margin-top:12px; font-weight:600"></div>
+
+            <div class="campo-accion" style="margin-top:12px">
+              <button id="btn-tx-split-guardar" class="btn-confirmar" disabled>✓ Confirmar y guardar distribución</button>
+            </div>
+          </div>
+
           <div class="campo-accion">
             <div id="tx-preview" class="preview oculto"></div>
             <button id="btn-tx-preview" class="btn-primario">Vista previa</button>
