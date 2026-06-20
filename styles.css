@@ -78,10 +78,51 @@ nav {
   background: var(--bg3);
   border-bottom: 1px solid var(--borde);
   display: flex;
-  gap: 4px;
+  gap: 6px;
   padding: 8px 24px;
-  overflow-x: auto;
+  flex-wrap: wrap;
 }
+.nav-grupo { position: relative; }
+.nav-grupo-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--texto2);
+  padding: 8px 16px;
+  border-radius: var(--radio);
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.nav-grupo-btn:hover { color: var(--texto); background: var(--bg2); }
+.nav-flecha { font-size: 10px; transition: transform 0.2s; }
+.nav-grupo.abierto .nav-flecha { transform: rotate(180deg); }
+/* Grupo que contiene la vista activa: resaltado */
+.nav-grupo.tiene-activo .nav-grupo-btn {
+  background: var(--acento);
+  color: #fff;
+  border-color: var(--acento);
+}
+.nav-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--bg3);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 6px;
+  min-width: 200px;
+  z-index: 50;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  flex-direction: column;
+  gap: 2px;
+}
+.nav-grupo.abierto .nav-menu { display: flex; }
 .nav-btn {
   background: none;
   border: 1px solid transparent;
@@ -92,6 +133,8 @@ nav {
   font-size: 14px;
   white-space: nowrap;
   transition: all 0.2s;
+  text-align: left;
+  width: 100%;
 }
 .nav-btn:hover { color: var(--texto); background: var(--bg2); }
 .nav-btn.activo {
@@ -99,6 +142,8 @@ nav {
   color: #fff;
   border-color: var(--acento);
 }
+/* Asistente: botón suelto sin desplegable */
+.nav-suelto { width: auto; }
 
 /* MAIN */
 main { padding: 24px; max-width: 960px; margin: 0 auto; }
