@@ -462,7 +462,7 @@ async function cargarDatos() {
   try {
     const [filasProductos, filasGrupos, filasTx, filasPpto, filasContexto, filasConfig, filasCuotas] = await Promise.all([
       leerHoja('Productos!A2:Q'),
-      leerHoja('Grupos!A2:F'),
+      leerHoja('Grupos!A2:G'),
       leerHoja('Transacciones!A2:L'),
       leerHoja('Presupuesto!A2:F'),
       leerHoja('Contexto!A2:C'),
@@ -484,7 +484,7 @@ async function cargarDatos() {
       tipoTasa: f[16] || ''
     }));
 
-    estado.grupos = filasGrupos.map(f => ({ tipo: f[0], grupo: f[1], subgrupo: f[2], cuentaDestino: f[3] || '', esCostoFinanciero: (f[4] || '').toString().toUpperCase() === 'SI', esRendimientoLP: (f[5] || '').toString().toUpperCase() === 'SI' }));
+    estado.grupos = filasGrupos.map(f => ({ tipo: f[0], grupo: f[1], subgrupo: f[2], cuentaDestino: f[3] || '', esCostoFinanciero: (f[4] || '').toString().toUpperCase() === 'SI', esRendimientoLP: (f[5] || '').toString().toUpperCase() === 'SI', idSubgrupo: (f[6] || '').toString().trim() }));
     estado.transacciones = filasTx.map(f => ({
       id: f[0], fecha: f[1], tipo: f[2], grupo: f[3], subgrupo: f[4],
       origen: f[5], destino: f[6], monto: parseFloat(f[7]) || 0,
@@ -2479,11 +2479,11 @@ async function guardarNomina() {
 
     if (linea.dataset.grupo) {
       // Descuento fijo predefinido
-      descuentos.push({ grupo: linea.dataset.grupo, sub: linea.dataset.sub, valor });
+      descuentos.push({ grupo: linea.dataset.grupo, sub: linea.dataset.sub, idsub: linea.dataset.idsub || '', valor });
     } else {
       // Descuento nuevo agregado
       const rubro = linea.querySelector('.rubro-nuevo')?.value || 'Otros egresos';
-      descuentos.push({ grupo: 'Otros egresos', sub: rubro, valor });
+      descuentos.push({ grupo: 'Otros egresos', sub: rubro, idsub: '', valor });
     }
   });
 
@@ -2494,10 +2494,14 @@ async function guardarNomina() {
   try {
     const baseId = Date.now();
 
+    // ID estable del subgrupo del salario (se resuelve una vez)
+    const gSalario = estado.grupos.find(x => x.subgrupo === 'ARUS salario neto');
+    const idSalario = gSalario ? gSalario.idSubgrupo : '';
+
     // 1. Registrar ingreso bruto (entra a la cuenta)
     await escribirFila('Transacciones', [
       'TX' + baseId, fecha, 'Ingreso', 'Ingresos', 'ARUS salario neto',
-      cuentaDestino, '', bruto, 'Salario bruto quincena', 'Nómina', 'TRUE', ''
+      cuentaDestino, '', bruto, 'Salario bruto quincena', 'Nómina', 'TRUE', '', idSalario
     ]);
 
     // 2. Registrar cada descuento.
@@ -2506,17 +2510,22 @@ async function guardarNomina() {
     //    puente P22). Si no, como Egreso normal de la cuenta.
     let i = 1;
     for (const d of descuentos) {
-      const gDesc = estado.grupos.find(x => x.grupo === d.grupo && x.subgrupo === d.sub);
+      // Buscar el subgrupo por su ID estable (si la línea lo trae); si no
+      // (descuento nuevo escrito a mano), caer al nombre como respaldo.
+      const gDesc = d.idsub
+        ? estado.grupos.find(x => x.idSubgrupo === d.idsub)
+        : estado.grupos.find(x => x.grupo === d.grupo && x.subgrupo === d.sub);
       const ctaDestino = gDesc && gDesc.cuentaDestino ? gDesc.cuentaDestino : '';
+      const idSub = gDesc ? gDesc.idSubgrupo : '';
       if (ctaDestino) {
         await escribirFila('Transacciones', [
           'TX' + (baseId + i), fecha, 'Traslado', d.grupo, d.sub,
-          cuentaDestino, ctaDestino, d.valor, 'Descuento nómina', 'Nómina', 'TRUE', ''
+          cuentaDestino, ctaDestino, d.valor, 'Descuento nómina', 'Nómina', 'TRUE', '', idSub
         ]);
       } else {
         await escribirFila('Transacciones', [
           'TX' + (baseId + i), fecha, 'Egreso', d.grupo, d.sub,
-          cuentaDestino, '', d.valor, 'Descuento nómina', 'Nómina', 'TRUE', ''
+          cuentaDestino, '', d.valor, 'Descuento nómina', 'Nómina', 'TRUE', '', idSub
         ]);
       }
       i++;
