@@ -878,11 +878,18 @@ function configurarFormularios() {
           .map(chk => chk.value);
 
         const idCapital = 'TX' + Date.now();
+        // Buscar el subgrupo de pago real de la deuda destino (su Cuenta_Destino
+        // apunta al producto). Así la fila queda con "Pago TC MC Nu" (y su ID)
+        // en vez del genérico "Pago de deuda". Si no se encuentra, cae al genérico.
+        const gPagoDest = estado.grupos.find(x => x.cuentaDestino === datos.destino);
+        const grupoCap = gPagoDest ? gPagoDest.grupo : 'Traslados';
+        const subCap = gPagoDest ? gPagoDest.subgrupo : 'Pago de deuda';
+        const idSubCap = gPagoDest ? gPagoDest.idSubgrupo : '';
         // 1) Traslado del CAPITAL (monto - interés) a la deuda
         await escribirFila('Transacciones', [
-          idCapital, datos.fecha, 'Traslado', 'Traslados', 'Pago de deuda',
+          idCapital, datos.fecha, 'Traslado', grupoCap, subCap,
           datos.origen, datos.destino, capital,
-          datos.descripcion || 'Pago de deuda', 'Manual', 'TRUE', ''
+          datos.descripcion || 'Pago de deuda', 'Manual', 'TRUE', '', idSubCap
         ]);
 
         // 2) Egreso de COSTO FINANCIERO por el interés (desde la cuenta origen)
@@ -894,7 +901,7 @@ function configurarFormularios() {
             await escribirFila('Transacciones', [
               'TX' + (Date.now() + 1), datos.fecha, 'Egreso', gCF.grupo, 'Costo financiero',
               datos.origen, '', interes,
-              'Interés ' + (datos.descripcion || 'pago de deuda'), 'Manual', 'TRUE', ''
+              'Interés ' + (datos.descripcion || 'pago de deuda'), 'Manual', 'TRUE', '', gCF.idSubgrupo || ''
             ]);
           }
         }
@@ -913,9 +920,10 @@ function configurarFormularios() {
 
       // ── Traslado normal / disposición (comportamiento de siempre) ──
       const id = 'TX' + Date.now();
+      const gTrasl = estado.grupos.find(x => x.subgrupo === 'Traslado entre cuentas');
       await escribirFila('Transacciones', [
         id, datos.fecha, 'Traslado', 'Traslados', 'Traslado entre cuentas',
-        datos.origen, datos.destino, datos.monto, datos.descripcion, 'Manual', 'TRUE', ''
+        datos.origen, datos.destino, datos.monto, datos.descripcion, 'Manual', 'TRUE', '', gTrasl ? gTrasl.idSubgrupo : ''
       ]);
       await actualizarSaldoProducto(datos.origen, 'Egreso', datos.monto);
       await actualizarSaldoProducto(datos.destino, 'Ingreso', datos.monto);
