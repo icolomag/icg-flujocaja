@@ -424,8 +424,10 @@ async function confirmarCorreo(gmailId) {
       : 0;
 
     let r;
+    let gmfGmail = 0;
     if (esPagoDeuda) {
       // Pago de deuda: partir en capital (traslado) + interés (costo financiero)
+      // El GMF lo genera registrarPagoDeudaPartido sobre el total (no acá, para no duplicar)
       r = await registrarPagoDeudaPartido(datosTx, interes);
       if (r.destino) {
         const prodDestino = estado.productos.find(p => p.id === r.destino);
@@ -441,10 +443,14 @@ async function confirmarCorreo(gmailId) {
       if (!r.esTraslado && prodSel && prodSel.tipo === 'Tarjeta Crédito') {
         await generarCuotasTC(r.idTx, datosTx);
       }
+      // GMF si la salida es desde cuenta de ahorros no exenta
+      gmfGmail = await generarGMF(producto, c.monto, c.fecha, descripcion, 'Gmail');
     }
     await cargarDatos();
     mostrarSpinner(false);
-    mostrarToast(r.esTraslado ? '✓ Pago de TC registrado desde Gmail' : '✓ Transacción registrada desde Gmail');
+    let msgGmail = r.esTraslado ? '✓ Pago de TC registrado desde Gmail' : '✓ Transacción registrada desde Gmail';
+    if (gmfGmail > 0) msgGmail += ` + GMF ${fmt(gmfGmail)}`;
+    mostrarToast(msgGmail);
     document.getElementById(`correo-${gmailId}`)?.remove();
     estado.correosPendientes = estado.correosPendientes.filter(x => x.gmailId !== gmailId);
   } catch(e) {
@@ -1038,9 +1044,13 @@ async function guardarSplitTarjeta(origen, ref) {
       const r = construirFilaTx(datos);
       await escribirFila('Transacciones', r.fila);
     }
+    // GMF una sola vez sobre el TOTAL que salió de la cuenta
+    const gmfSplitT = await generarGMF(producto, est.total, fecha, descripcion, fuente);
     await cargarDatos();
     mostrarSpinner(false);
-    mostrarToast(`✓ Distribución registrada (${est.filas.length} movimientos)`);
+    mostrarToast(gmfSplitT > 0
+      ? `✓ Distribución registrada (${est.filas.length} mov.) + GMF ${fmt(gmfSplitT)}`
+      : `✓ Distribución registrada (${est.filas.length} movimientos)`);
     // Quitar la tarjeta y limpiar
     document.getElementById(idTarjeta)?.remove();
     if (origen === 'gmail') {
@@ -1661,6 +1671,10 @@ async function registrarPagoDeudaPartido(d, interes) {
     }
   }
 
+  // 3) GMF sobre el TOTAL que salió de la cuenta de ahorros (capital + interés),
+  //    una sola vez. Si la cuenta es exenta o no es cuenta de caja, devuelve 0.
+  await generarGMF(d.producto, d.monto, d.fecha, d.descripcion || 'Pago de deuda', d.fuente);
+
   return {
     idTxCapital: rCapital.idTx,
     idTxInteres,
@@ -2192,8 +2206,10 @@ async function registrarMovimientoImagen(i) {
       : 0;
 
     let r;
+    let gmfImg = 0;
     if (esPagoDeuda) {
       // Pago de deuda: partir en capital (traslado) + interés (costo financiero)
+      // El GMF lo genera registrarPagoDeudaPartido sobre el total (no acá, para no duplicar)
       r = await registrarPagoDeudaPartido(datosTx, interes);
       if (r.destino) {
         const prodDestino = estado.productos.find(p => p.id === r.destino);
@@ -2209,10 +2225,14 @@ async function registrarMovimientoImagen(i) {
       if (!r.esTraslado && prodSel && prodSel.tipo === 'Tarjeta Crédito') {
         await generarCuotasTC(r.idTx, datosTx);
       }
+      // GMF si la salida es desde cuenta de ahorros no exenta
+      gmfImg = await generarGMF(producto, m.monto, m.fecha, descripcion, 'Imagen');
     }
     await cargarDatos();
     mostrarSpinner(false);
-    mostrarToast(r.esTraslado ? '✓ Pago de TC registrado' : '✓ Movimiento registrado');
+    let msgImg = r.esTraslado ? '✓ Pago de TC registrado' : '✓ Movimiento registrado';
+    if (gmfImg > 0) msgImg += ` + GMF ${fmt(gmfImg)}`;
+    mostrarToast(msgImg);
     document.getElementById(`img-mov-${i}`).remove();
   } catch(e) {
     mostrarSpinner(false);
