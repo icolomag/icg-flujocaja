@@ -1182,7 +1182,7 @@ async function registrarPagoDeudaPartido(d, interes) {
       const filaInteres = [
         idTxInteres, d.fecha, 'Egreso', gCF.grupo, 'Costo financiero',
         d.producto, '', intNum,
-        'Interés ' + (d.descripcion || ''), d.fuente, 'TRUE', d.notas || ''
+        'Interés ' + (d.descripcion || ''), d.fuente, 'TRUE', d.notas || '', gCF.idSubgrupo || ''
       ];
       await escribirFila('Transacciones', filaInteres);
     }
@@ -1204,6 +1204,7 @@ function construirFilaTx(d) {
   // d = { fecha, tipo, grupo, subgrupo, producto, monto, descripcion, fuente, notas }
   const g = estado.grupos.find(x => x.grupo === d.grupo && x.subgrupo === d.subgrupo);
   const tcDestino = g && g.cuentaDestino ? g.cuentaDestino : '';
+  const idSub = g ? g.idSubgrupo : '';   // ID estable del subgrupo (col M)
   const idTx = 'TX' + Date.now();
 
   if (tcDestino) {
@@ -1215,7 +1216,7 @@ function construirFilaTx(d) {
       destino: tcDestino,
       fila: [
         idTx, d.fecha, 'Traslado', d.grupo, d.subgrupo,
-        d.producto, tcDestino, d.monto, d.descripcion, d.fuente, 'TRUE', d.notas || ''
+        d.producto, tcDestino, d.monto, d.descripcion, d.fuente, 'TRUE', d.notas || '', idSub
       ]
     };
   }
@@ -1228,7 +1229,7 @@ function construirFilaTx(d) {
     destino: '',
     fila: [
       idTx, d.fecha, d.tipo, d.grupo, d.subgrupo,
-      d.producto, '', d.monto, d.descripcion, d.fuente, 'TRUE', d.notas || ''
+      d.producto, '', d.monto, d.descripcion, d.fuente, 'TRUE', d.notas || '', idSub
     ]
   };
 }
