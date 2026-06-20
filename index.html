@@ -46,21 +46,38 @@
 
     <!-- NAV -->
     <nav>
-      <button class="nav-btn activo" data-vista="dashboard">Dashboard</button>
-      <button class="nav-btn" data-vista="extracto">📄 Extracto</button>
-      <button class="nav-btn" data-vista="transaccion">+ Transacción</button>
-      <button class="nav-btn" data-vista="traslado">⇄ Traslado</button>
-      <button class="nav-btn" data-vista="abono-tc">💳 Abono TC</button>
-      <button class="nav-btn" data-vista="nomina">💵 Nómina</button>
-      <button class="nav-btn" data-vista="historial">Historial</button>
-      <button class="nav-btn" data-vista="gmail">📧 Gmail</button>
-      <button class="nav-btn" data-vista="imagen">📷 Imagen</button>
-      <button class="nav-btn" data-vista="asistente">🤖 Asistente</button>
-      <button class="nav-btn" data-vista="notas">📝 Notas</button>
-      <button class="nav-btn" data-vista="proyeccion">📈 Proyección</button>
-      <button class="nav-btn" data-vista="presupuesto">📊 vs Presupuesto</button>
-      <button class="nav-btn" data-vista="ppto-vista">📅 Presupuesto 12M</button>
-      <button class="nav-btn" data-vista="cierre">🔄 Cierre mes</button>
+      <div class="nav-grupo" data-grupo="consultar">
+        <button class="nav-grupo-btn">📊 Consultar <span class="nav-flecha">▾</span></button>
+        <div class="nav-menu">
+          <button class="nav-btn activo" data-vista="dashboard">Dashboard</button>
+          <button class="nav-btn" data-vista="extracto">📄 Extracto</button>
+          <button class="nav-btn" data-vista="historial">Historial</button>
+          <button class="nav-btn" data-vista="presupuesto">📊 vs Presupuesto</button>
+          <button class="nav-btn" data-vista="proyeccion">📈 Proyección</button>
+        </div>
+      </div>
+      <div class="nav-grupo" data-grupo="registrar">
+        <button class="nav-grupo-btn">✍️ Registrar <span class="nav-flecha">▾</span></button>
+        <div class="nav-menu">
+          <button class="nav-btn" data-vista="transaccion">+ Transacción</button>
+          <button class="nav-btn" data-vista="traslado">⇄ Traslado</button>
+          <button class="nav-btn" data-vista="abono-tc">💳 Abono TC</button>
+          <button class="nav-btn" data-vista="nomina">💵 Nómina</button>
+          <button class="nav-btn" data-vista="gmail">📧 Gmail</button>
+          <button class="nav-btn" data-vista="imagen">📷 Imagen</button>
+        </div>
+      </div>
+      <div class="nav-grupo" data-grupo="cerrar">
+        <button class="nav-grupo-btn">🔄 Cerrar/Configurar <span class="nav-flecha">▾</span></button>
+        <div class="nav-menu">
+          <button class="nav-btn" data-vista="cierre">🔄 Cierre mes</button>
+          <button class="nav-btn" data-vista="ppto-vista">📅 Presupuesto 12M</button>
+          <button class="nav-btn" data-vista="notas">📝 Notas</button>
+        </div>
+      </div>
+      <div class="nav-grupo" data-grupo="ia">
+        <button class="nav-btn nav-suelto" data-vista="asistente">🤖 Asistente</button>
+      </div>
     </nav>
 
     <!-- CONTENIDO -->
