@@ -1379,10 +1379,15 @@ function configurarFormularios() {
         // 3) Marcar como Pagada las cuotas tildadas (el traslado de capital es la trazabilidad)
         await marcarCuotasSeleccionadas(idsCuotas, idCapital);
 
+        // 4) GMF sobre el TOTAL que salió de la cuenta origen (capital + interés), una vez
+        const gmfPago = await generarGMF(datos.origen, datos.monto, datos.fecha, datos.descripcion || 'Pago de deuda', 'Manual');
+
         await cargarDatos();
         mostrarSpinner(false);
         btn.disabled = false; btn.textContent = textoOrig;
-        mostrarToast('✓ Pago de deuda registrado' + (interes > 0 ? ' (capital + interés)' : ''));
+        let msgPago = '✓ Pago de deuda registrado' + (interes > 0 ? ' (capital + interés)' : '');
+        if (gmfPago > 0) msgPago += ` + GMF ${fmt(gmfPago)}`;
+        mostrarToast(msgPago);
         resetFormTr();
         cambiarVista('dashboard');
         return;
@@ -1401,10 +1406,14 @@ function configurarFormularios() {
       if (datos.esDisposicion) {
         await generarCuotasDisposicion(id, datos);
       }
+      // GMF sobre lo que salió del origen. En disposición el origen es una TC →
+      // generarGMF devuelve 0 (no es salida de caja). En traslado entre cuentas,
+      // genera si el origen es cuenta de ahorros no exenta (Nacho borra si no aplicaba).
+      const gmfTrasl = await generarGMF(datos.origen, datos.monto, datos.fecha, datos.descripcion || 'Traslado', 'Manual');
       await cargarDatos();
       mostrarSpinner(false);
       btn.disabled = false; btn.textContent = textoOrig;
-      mostrarToast('✓ Traslado registrado');
+      mostrarToast(gmfTrasl > 0 ? `✓ Traslado registrado + GMF ${fmt(gmfTrasl)}` : '✓ Traslado registrado');
       resetFormTr();
       cambiarVista('dashboard');
     } catch (e) {
