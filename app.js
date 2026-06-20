@@ -599,6 +599,12 @@ function poblarSelectores() {
     elGrupo.disabled = false;
     document.getElementById('tx-subgrupo').innerHTML = '<option value="">— Primero selecciona grupo —</option>';
     document.getElementById('tx-subgrupo').disabled = true;
+    // El botón de distribuir solo aplica a egresos
+    const splitBloque = document.getElementById('tx-split-abrir-bloque');
+    if (splitBloque) {
+      if (tipo === 'Egreso') splitBloque.classList.remove('oculto');
+      else splitBloque.classList.add('oculto');
+    }
   });
 
   document.getElementById('tx-grupo').addEventListener('change', function() {
@@ -611,6 +617,174 @@ function poblarSelectores() {
     elSub.disabled = false;
     actualizarAvisoDeudaTx();
   });
+}
+
+// ── SPLIT DE DÉBITO: distribuir un egreso en varios subgrupos ──────────
+// Estado del panel de distribución (renglones en memoria)
+let splitFilas = [];
+
+// Devuelve los grupos de tipo Egreso que NO son de deuda (sin Cuenta_Destino)
+function splitGruposEgreso() {
+  const noDeuda = estado.grupos.filter(g =>
+    g.tipo === 'Egreso' && !g.cuentaDestino
+  );
+  return [...new Set(noDeuda.map(g => g.grupo))];
+}
+
+// Devuelve los subgrupos (no deuda) de un grupo de egreso
+function splitSubgruposDe(grupo) {
+  return estado.grupos
+    .filter(g => g.tipo === 'Egreso' && g.grupo === grupo && !g.cuentaDestino)
+    .map(g => g.subgrupo);
+}
+
+// Abre el panel de distribución
+function abrirSplit() {
+  splitFilas = [
+    { grupo: '', subgrupo: '', monto: 0 },
+    { grupo: '', subgrupo: '', monto: 0 }
+  ];
+  // Pre-cargar el total con lo que haya en el campo de monto normal
+  const montoNormal = parseFloat(document.getElementById('tx-monto').value) || 0;
+  document.getElementById('tx-split-total').value = montoNormal > 0 ? montoNormal : '';
+  document.getElementById('tx-split-panel').classList.remove('oculto');
+  document.getElementById('tx-split-abrir-bloque').classList.add('oculto');
+  renderSplitFilas();
+  actualizarSplitContador();
+}
+
+// Cierra el panel sin guardar
+function cerrarSplit() {
+  document.getElementById('tx-split-panel').classList.add('oculto');
+  // Reaparece el botón si seguimos en Egreso
+  if (document.getElementById('tx-tipo').value === 'Egreso') {
+    document.getElementById('tx-split-abrir-bloque').classList.remove('oculto');
+  }
+  splitFilas = [];
+}
+
+// Dibuja los renglones del split
+function renderSplitFilas() {
+  const cont = document.getElementById('tx-split-filas');
+  const grupos = splitGruposEgreso();
+  cont.innerHTML = splitFilas.map((f, i) => {
+    const optsGrupo = '<option value="">— Grupo —</option>' +
+      grupos.map(g => `<option value="${g}" ${g === f.grupo ? 'selected' : ''}>${g}</option>`).join('');
+    const subs = f.grupo ? splitSubgruposDe(f.grupo) : [];
+    const optsSub = '<option value="">— Subgrupo —</option>' +
+      subs.map(s => `<option value="${s}" ${s === f.subgrupo ? 'selected' : ''}>${s}</option>`).join('');
+    const puedeBorrar = splitFilas.length > 1;
+    return `
+      <div style="display:grid; grid-template-columns:1fr 1fr 110px 32px; gap:6px; align-items:center; margin-bottom:6px">
+        <select onchange="splitCambiarGrupo(${i}, this.value)">${optsGrupo}</select>
+        <select onchange="splitCambiarSub(${i}, this.value)">${optsSub}</select>
+        <input type="number" min="0" placeholder="0" value="${f.monto || ''}" oninput="splitCambiarMonto(${i}, this.value)" />
+        ${puedeBorrar ? `<button type="button" class="btn-secundario" style="padding:4px 8px" onclick="splitBorrarFila(${i})">✕</button>` : '<span></span>'}
+      </div>`;
+  }).join('');
+}
+
+function splitCambiarGrupo(i, val) {
+  splitFilas[i].grupo = val;
+  splitFilas[i].subgrupo = ''; // al cambiar grupo, resetear subgrupo
+  renderSplitFilas();
+}
+function splitCambiarSub(i, val) {
+  splitFilas[i].subgrupo = val;
+}
+function splitCambiarMonto(i, val) {
+  splitFilas[i].monto = parseFloat(val) || 0;
+  actualizarSplitContador();
+}
+function splitBorrarFila(i) {
+  splitFilas.splice(i, 1);
+  renderSplitFilas();
+  actualizarSplitContador();
+}
+function splitAgregarFila() {
+  splitFilas.push({ grupo: '', subgrupo: '', monto: 0 });
+  renderSplitFilas();
+}
+
+// Actualiza el contador vivo y habilita/bloquea el botón de guardar
+function actualizarSplitContador() {
+  const total = parseFloat(document.getElementById('tx-split-total').value) || 0;
+  const suma = splitFilas.reduce((acc, f) => acc + (f.monto || 0), 0);
+  const dif = total - suma;
+  const cont = document.getElementById('tx-split-contador');
+  const btn = document.getElementById('btn-tx-split-guardar');
+  let texto, color, ok;
+  if (total <= 0) {
+    texto = 'Ingresa el monto total del débito.';
+    color = 'var(--texto2,#888)'; ok = false;
+  } else if (dif > 0) {
+    texto = `Distribuido: ${fmt(suma)} de ${fmt(total)} — faltan ${fmt(dif)}`;
+    color = '#c0392b'; ok = false;
+  } else if (dif < 0) {
+    texto = `Distribuido: ${fmt(suma)} de ${fmt(total)} — sobran ${fmt(-dif)}`;
+    color = '#c0392b'; ok = false;
+  } else {
+    texto = `✓ Distribuido: ${fmt(suma)} de ${fmt(total)} — cuadra`;
+    color = '#27ae60'; ok = true;
+  }
+  cont.textContent = texto;
+  cont.style.color = color;
+  btn.disabled = !ok;
+}
+
+// Valida y guarda la distribución como N egresos independientes
+async function guardarSplit() {
+  const fecha = document.getElementById('tx-fecha').value;
+  const producto = document.getElementById('tx-producto').value;
+  const descripcion = document.getElementById('tx-descripcion').value;
+  const notas = document.getElementById('tx-notas').value;
+  const total = parseFloat(document.getElementById('tx-split-total').value) || 0;
+
+  // Validaciones de los datos comunes
+  if (!fecha) { mostrarToast('Selecciona una fecha'); return; }
+  if (!producto) { mostrarToast('Selecciona el producto (cuenta)'); return; }
+  if (esPeriodoCerrado(fecha)) {
+    mostrarToast('🔒 No se puede registrar: la fecha pertenece a un mes ya cerrado');
+    return;
+  }
+  // Cada renglón debe tener grupo, subgrupo y monto > 0
+  for (let i = 0; i < splitFilas.length; i++) {
+    const f = splitFilas[i];
+    if (!f.grupo || !f.subgrupo) { mostrarToast(`Renglón ${i + 1}: falta grupo o subgrupo`); return; }
+    if (!f.monto || f.monto <= 0) { mostrarToast(`Renglón ${i + 1}: monto inválido`); return; }
+  }
+  // La suma debe cuadrar exacta
+  const suma = splitFilas.reduce((acc, f) => acc + (f.monto || 0), 0);
+  if (suma !== total) { mostrarToast('La suma de los renglones no cuadra con el total'); return; }
+
+  const btn = document.getElementById('btn-tx-split-guardar');
+  btn.disabled = true;
+  const textoOrig = btn.textContent;
+  btn.textContent = 'Guardando...';
+  mostrarSpinner(true);
+  try {
+    // Un egreso independiente por renglón, mismos fecha/producto/descripción
+    for (const f of splitFilas) {
+      const datos = {
+        fecha, tipo: 'Egreso', grupo: f.grupo, subgrupo: f.subgrupo,
+        producto, monto: f.monto, descripcion, notas, fuente: 'Manual-Split'
+      };
+      const r = construirFilaTx(datos);
+      await escribirFila('Transacciones', r.fila);
+    }
+    await cargarDatos();
+    mostrarToast(`✓ Distribución registrada (${splitFilas.length} movimientos)`);
+    cerrarSplit();
+    resetFormTx();
+    cambiarVista('dashboard');
+  } catch (e) {
+    mostrarToast('✗ Error al guardar la distribución');
+    console.error(e);
+  } finally {
+    mostrarSpinner(false);
+    btn.disabled = false;
+    btn.textContent = textoOrig;
+  }
 }
 
 // ── HISTORIAL ─────────────────────────────────────────────────────────
@@ -774,6 +948,18 @@ function configurarFormularios() {
   });
 
   document.getElementById('btn-tx-cancelar').addEventListener('click', resetFormTx);
+
+  // ── Listeners del split de débito ──
+  const btnSplitAbrir = document.getElementById('btn-tx-split-abrir');
+  if (btnSplitAbrir) btnSplitAbrir.addEventListener('click', abrirSplit);
+  const btnSplitCerrar = document.getElementById('btn-tx-split-cerrar');
+  if (btnSplitCerrar) btnSplitCerrar.addEventListener('click', cerrarSplit);
+  const btnSplitAgregar = document.getElementById('btn-tx-split-agregar');
+  if (btnSplitAgregar) btnSplitAgregar.addEventListener('click', splitAgregarFila);
+  const btnSplitGuardar = document.getElementById('btn-tx-split-guardar');
+  if (btnSplitGuardar) btnSplitGuardar.addEventListener('click', guardarSplit);
+  const inputSplitTotal = document.getElementById('tx-split-total');
+  if (inputSplitTotal) inputSplitTotal.addEventListener('input', actualizarSplitContador);
 
   // ── Blindaje: avisar que los pagos de deuda van por Traslado ──
   document.getElementById('tx-subgrupo').addEventListener('change', actualizarAvisoDeudaTx);
@@ -1132,6 +1318,11 @@ function resetFormTx() {
   document.getElementById('btn-tx-preview').classList.remove('oculto');
   const avisoDeuda = document.getElementById('tx-aviso-deuda');
   if (avisoDeuda) avisoDeuda.classList.add('oculto');
+  // Cerrar el panel de distribución si estaba abierto
+  const splitPanel = document.getElementById('tx-split-panel');
+  if (splitPanel) splitPanel.classList.add('oculto');
+  const splitAbrir = document.getElementById('tx-split-abrir-bloque');
+  if (splitAbrir) splitAbrir.classList.add('oculto');
 }
 
 function resetFormTr() {
