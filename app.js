@@ -1755,6 +1755,22 @@ function configurarNav() {
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => cambiarVista(btn.dataset.vista));
   });
+  // Abrir/cerrar grupos desplegables
+  document.querySelectorAll('.nav-grupo-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const grupo = btn.closest('.nav-grupo');
+      const yaAbierto = grupo.classList.contains('abierto');
+      cerrarMenusNav();
+      if (!yaAbierto) grupo.classList.add('abierto');
+    });
+  });
+  // Clic fuera de la barra → cierra cualquier menú abierto
+  document.addEventListener('click', cerrarMenusNav);
+}
+
+function cerrarMenusNav() {
+  document.querySelectorAll('.nav-grupo.abierto').forEach(g => g.classList.remove('abierto'));
 }
 
 function cambiarVista(vista) {
@@ -1774,6 +1790,14 @@ function cambiarVista(vista) {
   if (vista === 'extracto') inicializarExtracto();
   if (vista === 'ppto-vista') inicializarPptoVista();
   if (vista === 'abono-tc') inicializarAbonoTC();
+  // Cierra el menú desplegable y resalta el grupo que contiene la vista activa
+  cerrarMenusNav();
+  document.querySelectorAll('.nav-grupo').forEach(g => g.classList.remove('tiene-activo'));
+  const btnActivo = document.querySelector(`.nav-btn[data-vista="${vista}"]`);
+  if (btnActivo) {
+    const grupo = btnActivo.closest('.nav-grupo');
+    if (grupo) grupo.classList.add('tiene-activo');
+  }
 }
 
 // ── ABONO ANTICIPADO A TC ─────────────────────────────────────────────
