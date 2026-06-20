@@ -465,7 +465,7 @@ async function cargarDatos() {
   mostrarSpinner(true);
   try {
     const [filasProductos, filasGrupos, filasTx, filasPpto, filasContexto, filasConfig, filasCuotas] = await Promise.all([
-      leerHoja('Productos!A2:Q'),
+      leerHoja('Productos!A2:R'),
       leerHoja('Grupos!A2:G'),
       leerHoja('Transacciones!A2:M'),
       leerHoja('Presupuesto!A2:F'),
@@ -485,7 +485,8 @@ async function cargarDatos() {
       comentarios: f[13] || '',
       saldoCierre: parseFloat(f[14]) || 0,
       metodoAmortizacion: f[15] || '',
-      tipoTasa: f[16] || ''
+      tipoTasa: f[16] || '',
+      exentoGMF: (f[17] || '').toString().toUpperCase() === 'TRUE'
     }));
 
     estado.grupos = filasGrupos.map(f => ({ tipo: f[0], grupo: f[1], subgrupo: f[2], cuentaDestino: f[3] || '', esCostoFinanciero: (f[4] || '').toString().toUpperCase() === 'SI', esRendimientoLP: (f[5] || '').toString().toUpperCase() === 'SI', idSubgrupo: (f[6] || '').toString().trim() }));
@@ -621,6 +622,40 @@ function poblarSelectores() {
     elSub.disabled = false;
     actualizarAvisoDeudaTx();
   });
+}
+
+// ── GMF (4x1000 / Gravamen a los Movimientos Financieros) ─────────────
+// Tasa legal del GMF: $4 por cada $1.000 que sale de una cuenta = 0.004
+const TASA_GMF = 0.004;
+
+// ¿La cuenta de salida está exenta del GMF?
+// Solo las cuentas de ahorro pueden estar marcadas exentas (col Exento_GMF=TRUE en Productos).
+// Cualquier otra cosa (cuenta no marcada, tarjeta, etc.) → no exenta.
+function productoExentoGMF(idProducto) {
+  const p = estado.productos.find(x => x.id === idProducto);
+  return !!(p && p.exentoGMF);
+}
+
+// ¿Desde este producto puede salir plata que genere GMF?
+// El GMF grava salidas desde cuentas de ahorro. No aplica si la plata "sale"
+// de una tarjeta de crédito o un crédito (eso es disponer de deuda, no debitar caja).
+function productoGeneraGMF(idProducto) {
+  const p = estado.productos.find(x => x.id === idProducto);
+  if (!p) return false;
+  const tipo = (p.tipo || '').toLowerCase();
+  // Solo cuentas de ahorro / inversión líquida (de donde sale caja real)
+  const esCuentaCaja = tipo.includes('ahorro') || tipo.includes('inversión') || tipo.includes('inversion');
+  return esCuentaCaja && !p.exentoGMF;
+}
+
+// Calcula el valor del GMF de una salida. Devuelve 0 si la cuenta es exenta
+// o si no es una cuenta de la que salga caja real (tarjeta/crédito).
+// Redondea al peso.
+function calcularGMF(idProducto, monto) {
+  const m = Number(monto) || 0;
+  if (m <= 0) return 0;
+  if (!productoGeneraGMF(idProducto)) return 0;
+  return Math.round(m * TASA_GMF);
 }
 
 // ── SPLIT DE DÉBITO: distribuir un egreso en varios subgrupos ──────────
