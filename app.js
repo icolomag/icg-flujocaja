@@ -2717,17 +2717,20 @@ function renderFlujos(flujos) {
     <div class="flujo-card">
       <div class="flujo-card-label">Flujo operativo</div>
       <div class="flujo-card-valor ${clsOp}">${fmt(op.netoReal)}</div>
-      <div class="flujo-card-tag">Real · Ppto ${fmt(op.neto)}</div>
+      <div class="flujo-card-tag">Real</div>
+      <div class="flujo-card-comp">Ppto ${fmt(op.neto)}</div>
     </div>
     <div class="flujo-card">
       <div class="flujo-card-label">Flujo financiero</div>
       <div class="flujo-card-valor ${clsFin}">${fmt(fin.netoReal)}</div>
-      <div class="flujo-card-tag">Real · Proyect. ${fmt(fin.neto)}</div>
+      <div class="flujo-card-tag">Real</div>
+      <div class="flujo-card-comp">Proyect. ${fmt(fin.neto)}</div>
     </div>
     <div class="flujo-card">
       <div class="flujo-card-label">Flujo neto del mes</div>
       <div class="flujo-card-valor ${clsNeto}">${fmt(netoCombinado)}</div>
-      <div class="flujo-card-tag">Real · Proyect. ${fmt(netoProyectado)}</div>
+      <div class="flujo-card-tag">Real</div>
+      <div class="flujo-card-comp">Proyect. ${fmt(netoProyectado)}</div>
     </div>
   </div>
 
@@ -2742,7 +2745,7 @@ function renderFlujos(flujos) {
   // ── BLOQUE OPERATIVO ──
   html += `<div class="flujo-bloque-header operativo">
     <div>Flujo operativo</div>
-    <div class="num"><span style="font-size:12px;color:var(--texto2);font-weight:400">${fmt(op.neto)}</span> &nbsp; ${fmt(op.netoReal)}</div>
+    <div class="num bloque-doble"><span class="proy">${fmt(op.neto)}</span><span class="real">${fmt(op.netoReal)}</span></div>
   </div>`;
 
   if (nivelPpto !== 'resumen') {
@@ -2774,7 +2777,7 @@ function renderFlujos(flujos) {
   // ── BLOQUE FINANCIERO ── (informativo: Proyectado vs Real)
   html += `<div class="flujo-bloque-header financiero">
     <div>Flujo financiero</div>
-    <div class="num"><span style="font-size:12px;color:var(--texto2);font-weight:400">${fmt(fin.neto)}</span> &nbsp; ${fmt(fin.netoReal)}</div>
+    <div class="num bloque-doble"><span class="proy">${fmt(fin.neto)}</span><span class="real">${fmt(fin.netoReal)}</span></div>
   </div>`;
 
   if (nivelPpto !== 'resumen') {
@@ -2801,7 +2804,7 @@ function renderFlujos(flujos) {
   const clsNetoProy = netoProyectado >= 0 ? 'verde' : 'rojo';
   html += `<div class="flujo-bloque-header neto">
     <div>Flujo neto del mes</div>
-    <div class="num"><span style="font-size:12px;font-weight:400" class="${clsNetoProy}">${fmt(netoProyectado)}</span> &nbsp; <span class="${clsNeto}">${fmt(netoCombinado)}</span></div>
+    <div class="num bloque-doble"><span class="proy ${clsNetoProy}">${fmt(netoProyectado)}</span><span class="real ${clsNeto}">${fmt(netoCombinado)}</span></div>
   </div>`;
 
   html += `</div>
