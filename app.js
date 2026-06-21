@@ -2536,7 +2536,7 @@ function renderOlaCaja() {
     <div class="flujo-card">
       <div class="flujo-card-label">Saldo de partida</div>
       <div class="flujo-card-valor">${fmt(proy.saldoPartida)}</div>
-      <div class="flujo-card-tag">Caja disponible hoy</div>
+      <div class="flujo-card-tag">Saldo al inicio del mes</div>
     </div>
     <div class="flujo-card">
       <div class="flujo-card-label">Punto más bajo</div>
@@ -4001,10 +4001,15 @@ function calcularFlujosMes(mesYYYYMM) {
 // Financiero: proyectado desde Calendario_Deuda (lo que vence).
 // ══════════════════════════════════════════════════════════════════════
 function calcularProyeccionCaja(numMeses = 12) {
-  // 1. Saldo de partida = caja disponible actual (Ahorros + Inversión líquida)
+  // 1. Saldo de partida = saldo a INICIO del mes corriente = saldo del último
+  // cierre (cierre del mes anterior). Se usa saldoCierre (congelado al cierre),
+  // NO saldoActual (que ya incluye los movimientos del mes en curso). Así la ola
+  // habla "mes completo": saldo inicio de mes + operativo completo + financiero
+  // completo, sin mezclar un mes a medias con flujos del mes entero.
+  // Criterio de caja: columna disponible (fuente de verdad), no el tipo.
   const saldoPartida = estado.productos
-    .filter(p => p.disponible && p.saldoActual >= 0)
-    .reduce((s, p) => s + p.saldoActual, 0);
+    .filter(p => p.disponible && p.saldoCierre >= 0)
+    .reduce((s, p) => s + p.saldoCierre, 0);
 
   // 2. Mes de arranque = mes corriente
   const hoy = new Date();
