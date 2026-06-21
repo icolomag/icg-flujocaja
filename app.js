@@ -2395,7 +2395,7 @@ CONSIDERACIONES Y DECISIONES ACTUALES (mantenidas por Nacho, son verdades vigent
 ${notasContexto || 'Sin consideraciones registradas'}`;
 }
 
-async function enviarMensajeChat(textoForzado) {
+async function enviarMensajeChat(textoForzado, opciones) {
   const input = document.getElementById('chat-input');
   const texto = textoForzado || input.value.trim();
   if (!texto) return;
@@ -2480,6 +2480,17 @@ GESTIÓN DE CONSIDERACIONES: Nacho mantiene una lista de "consideraciones y deci
     chatHistorial.push({ role: 'assistant', content: respuesta });
     agregarMensajeChat('asistente', respuesta);
 
+    // Si esta respuesta es un análisis de cierre, ofrecer la descarga del documento
+    if (opciones && opciones.esCierre) {
+      const cont = document.getElementById('chat-mensajes');
+      const wrap = document.createElement('div');
+      wrap.className = 'chat-msg asistente';
+      wrap.style.background = 'transparent';
+      wrap.innerHTML = `<button class="btn-descargar-cierre" onclick="descargarCierreHTML()">📥 Descargar documento de cierre (HTML)</button>`;
+      cont.appendChild(wrap);
+      cont.scrollTop = cont.scrollHeight;
+    }
+
   } catch(e) {
     document.getElementById(idPensando)?.remove();
     agregarMensajeChat('asistente', 'Error de conexión: ' + e.message);
@@ -2506,40 +2517,30 @@ function mesSiguiente(mesYYYYMM) {
 }
 
 // Construye el texto del paquete de cierre que ve la IA.
-function construirPaqueteCierre(mesYYYYMM) {
+// Calcula los datos del cierre de un mes en forma de OBJETO estructurado.
+// Lo usan tanto el texto que ve la IA como el HTML de descarga (misma fuente).
+function calcularDatosCierre(mesYYYYMM) {
   const op = calcularFlujoOperativo(mesYYYYMM);
   const fin = calcularFlujoFinanciero(mesYYYYMM);
   const mesSig = mesSiguiente(mesYYYYMM);
   const opSig = calcularFlujoOperativo(mesSig);
 
-  // Saldo de caja inicio/fin del mes analizado. Se calcula directo (no se busca
-  // en la ola, porque la ola arranca en el mes corriente y el mes cerrado suele
-  // quedar fuera). Inicio = saldo de cierre disponible; fin = inicio + flujo neto
-  // del mes (operativo presupuestado + financiero proyectado), coherente con la ola.
-  const saldoInicialNum = estado.productos
+  const saldoInicial = estado.productos
     .filter(p => p.disponible && p.saldoCierre >= 0)
     .reduce((s, p) => s + p.saldoCierre, 0);
-  const saldoFinalNum = saldoInicialNum + op.neto + fin.neto;
-  const saldoIni = fmt(saldoInicialNum);
-  const saldoFin = fmt(saldoFinalNum);
+  const saldoFinal = saldoInicial + op.neto + fin.neto;
 
-  // ── BLOQUE 2: operativo real vs presupuesto, por grupo y subgrupo ──
-  let lineasIng = [], lineasEgr = [];
+  const gruposIng = [], gruposEgr = [];
   Object.entries(op.grupos).forEach(([grupo, g]) => {
-    const subs = Object.entries(g.subgrupos)
-      .map(([sub, v]) => {
-        const desv = v.real - v.ppto;
-        return `    ${sub}: ppto ${fmt(v.ppto)} | real ${fmt(v.real)} | desv ${fmt(desv)}`;
-      }).join('\n');
-    const bloque = `  ${grupo} (ppto ${fmt(g.total)} / real ${fmt(g.totalReal)}):\n${subs}`;
-    if (g.tipo === 'ingreso') lineasIng.push(bloque);
-    else lineasEgr.push(bloque);
+    const subgrupos = Object.entries(g.subgrupos).map(([sub, v]) => ({
+      sub, ppto: v.ppto, real: v.real, desv: v.real - v.ppto
+    }));
+    const fila = { grupo, total: g.total, totalReal: g.totalReal, subgrupos };
+    if (g.tipo === 'ingreso') gruposIng.push(fila);
+    else gruposEgr.push(fila);
   });
 
-  // ── BLOQUE 4: provisiones rodantes ──
-  const provs = estado.grupos.filter(g => g.esProvision);
-  let lineasProv = provs.map(p => {
-    // real y ppto del subgrupo en el mes analizado
+  const provisiones = estado.grupos.filter(g => g.esProvision).map(p => {
     let ppto = 0, real = 0;
     const gOp = op.grupos[p.grupo];
     if (gOp && gOp.subgrupos[p.subgrupo]) {
@@ -2548,52 +2549,69 @@ function construirPaqueteCierre(mesYYYYMM) {
     }
     const sobrante = Math.max(0, ppto - real);
     const sobregiro = real > ppto ? real - ppto : 0;
-    // lo ya presupuestado en el mes siguiente para ese rubro
     let pptoSig = 0;
     const gSig = opSig.grupos[p.grupo];
     if (gSig && gSig.subgrupos[p.subgrupo]) pptoSig = gSig.subgrupos[p.subgrupo].ppto;
-    const acumuladoSig = pptoSig + sobrante;
     const tope = p.topeProvision || 0;
-    const excedeTope = tope > 0 && acumuladoSig > tope;
+    const acumuladoSig = pptoSig + sobrante;
+    return {
+      grupo: p.grupo, subgrupo: p.subgrupo, ppto, real, sobrante, sobregiro,
+      tope, pptoSig, acumuladoSig, excedeTope: tope > 0 && acumuladoSig > tope,
+      excedente: Math.max(0, acumuladoSig - tope)
+    };
+  });
 
-    let linea = `  ${p.grupo} > ${p.subgrupo}: ppto ${fmt(ppto)} | real ${fmt(real)} | sobrante ${fmt(sobrante)}`;
-    if (sobregiro > 0) linea += ` | SOBREGIRO ${fmt(sobregiro)} (gastó de más)`;
-    linea += `\n     tope acumulación: ${fmt(tope)} | ya presupuestado en ${mesSig}: ${fmt(pptoSig)}`;
-    linea += `\n     si se traslada el sobrante → ${mesSig} quedaría en ${fmt(acumuladoSig)}`;
-    if (excedeTope) linea += ` ⚠️ EXCEDE el tope de ${fmt(tope)} (excedente ${fmt(acumuladoSig - tope)})`;
+  const notas = (estado.contexto || []).map(c => ({ categoria: c.categoria, consideracion: c.consideracion }));
+
+  return { mes: mesYYYYMM, mesSig, saldoInicial, saldoFinal, op, fin, gruposIng, gruposEgr, provisiones, notas };
+}
+
+// Arma el texto plano del paquete que ve la IA, a partir del objeto de datos.
+function construirPaqueteCierre(mesYYYYMM) {
+  const d = calcularDatosCierre(mesYYYYMM);
+
+  const bloqueGrupos = (grupos) => grupos.map(g => {
+    const subs = g.subgrupos.map(s =>
+      `    ${s.sub}: ppto ${fmt(s.ppto)} | real ${fmt(s.real)} | desv ${fmt(s.desv)}`
+    ).join('\n');
+    return `  ${g.grupo} (ppto ${fmt(g.total)} / real ${fmt(g.totalReal)}):\n${subs}`;
+  }).join('\n');
+
+  const lineasProv = d.provisiones.map(p => {
+    let linea = `  ${p.grupo} > ${p.subgrupo}: ppto ${fmt(p.ppto)} | real ${fmt(p.real)} | sobrante ${fmt(p.sobrante)}`;
+    if (p.sobregiro > 0) linea += ` | SOBREGIRO ${fmt(p.sobregiro)} (gastó de más)`;
+    linea += `\n     tope acumulación: ${fmt(p.tope)} | ya presupuestado en ${d.mesSig}: ${fmt(p.pptoSig)}`;
+    linea += `\n     si se traslada el sobrante → ${d.mesSig} quedaría en ${fmt(p.acumuladoSig)}`;
+    if (p.excedeTope) linea += ` ⚠️ EXCEDE el tope de ${fmt(p.tope)} (excedente ${fmt(p.excedente)})`;
     return linea;
   }).join('\n\n');
 
-  // ── BLOQUE 5: notas de contexto (situación vigente, atemporal) ──
-  let notas = '';
-  if (estado.contexto && estado.contexto.length) {
-    notas = estado.contexto.map(c => `- [${c.categoria}] ${c.consideracion}`).join('\n');
-  }
+  const notas = d.notas.map(c => `- [${c.categoria}] ${c.consideracion}`).join('\n');
 
   return `=== DATOS DEL CIERRE A ANALIZAR ===
 
-MES ANALIZADO: ${mesYYYYMM}
-Saldo de caja inicio de mes: ${saldoIni || 'n/d'}
-Saldo de caja fin de mes (proyectado): ${saldoFin || 'n/d'}
+MES ANALIZADO: ${d.mes}
+Saldo de caja inicio de mes: ${fmt(d.saldoInicial)}
+Saldo de caja fin de mes (proyectado): ${fmt(d.saldoFinal)}
 
 ── FLUJO OPERATIVO (real vs presupuesto) ──
 INGRESOS:
-${lineasIng.join('\n') || '  (sin ingresos)'}
-Total ingresos: ppto ${fmt(op.ingresos)} | real ${fmt(op.ingresosReal)}
+${bloqueGrupos(d.gruposIng) || '  (sin ingresos)'}
+Total ingresos: ppto ${fmt(d.op.ingresos)} | real ${fmt(d.op.ingresosReal)}
 
 EGRESOS:
-${lineasEgr.join('\n') || '  (sin egresos)'}
-Total egresos: ppto ${fmt(op.egresos)} | real ${fmt(op.egresosReal)}
+${bloqueGrupos(d.gruposEgr) || '  (sin egresos)'}
+Total egresos: ppto ${fmt(d.op.egresos)} | real ${fmt(d.op.egresosReal)}
 
-NETO OPERATIVO: ppto ${fmt(op.neto)} | real ${fmt(op.netoReal)}
+NETO OPERATIVO: ppto ${fmt(d.op.neto)} | real ${fmt(d.op.netoReal)}
 
 ── FLUJO FINANCIERO (proyectado vs real) ──
-Nuevos créditos (entra caja): proy ${fmt(fin.nuevosCreditos)} | real ${fmt(fin.nuevosCreditosReal)}
-Abonos a capital (sale caja, no es gasto): proy ${fmt(fin.abonoCapital)} | real ${fmt(fin.abonoCapitalReal)}
-Costo financiero (intereses, sí es gasto): proy ${fmt(fin.costoFinanciero)} | real ${fmt(fin.costoFinancieroReal)}
-Aportes inversión LP (sale caja): real ${fmt(fin.aportesLPReal)}
-Rendimientos LP (no toca caja): real ${fmt(fin.rendimientoLPReal)}
-NETO FINANCIERO: proy ${fmt(fin.neto)} | real ${fmt(fin.netoReal)}
+Nuevos créditos (entra caja): proy ${fmt(d.fin.nuevosCreditos)} | real ${fmt(d.fin.nuevosCreditosReal)}
+Abonos a capital (sale caja, no es gasto): proy ${fmt(d.fin.abonoCapital)} | real ${fmt(d.fin.abonoCapitalReal)}
+Costo financiero (intereses, sí es gasto): proy ${fmt(d.fin.costoFinanciero)} | real ${fmt(d.fin.costoFinancieroReal)}
+Aportes inversión LP (sale caja): real ${fmt(d.fin.aportesLPReal)}
+Rendimientos LP (no toca caja): real ${fmt(d.fin.rendimientoLPReal)}
+NETO FINANCIERO: proy ${fmt(d.fin.neto)} | real ${fmt(d.fin.netoReal)}
 
 ── PROVISIONES RODANTES (sobrante = ppto − real, mín 0) ──
 ${lineasProv || '  (sin rubros de provisión marcados)'}
@@ -2603,12 +2621,15 @@ ${notas || '  (sin notas de contexto)'}`;
 }
 
 // Dispara el análisis del último mes cerrado en el chat del asistente.
+let cierreAnalizadoMes = null; // mes del último análisis de cierre disparado
+
 function analizarCierre() {
   if (!estado.grupos || !estado.grupos.length) {
     mostrarToast('⚠️ Datos aún no cargados, intenta en un momento');
     return;
   }
   const mes = mesUltimoCierre();
+  cierreAnalizadoMes = mes;
   const paquete = construirPaqueteCierre(mes);
 
   const instruccion = `Analiza el cierre del mes ${mes}. Compara el real ejecutado contra el presupuesto operativo y contra el calendario de deuda (flujo financiero). Explica con criterio de tesorería las desviaciones MÁS relevantes (no listes todo, prioriza lo que importa y por qué). Señala explícitamente cualquier rubro que se haya sobregirado (gastó más de lo presupuestado).
@@ -2621,7 +2642,118 @@ ${paquete}`;
 
   // Cambiar a la pestaña del asistente y disparar el análisis en el chat
   cambiarVista('asistente');
-  enviarMensajeChat(instruccion);
+  enviarMensajeChat(instruccion, { esCierre: true });
+}
+
+// Toma el último mensaje del asistente del chat (el análisis recién generado).
+function ultimaRespuestaAsistente() {
+  for (let i = chatHistorial.length - 1; i >= 0; i--) {
+    if (chatHistorial[i].role === 'assistant') return chatHistorial[i].content;
+  }
+  return '';
+}
+
+// Genera y descarga el documento de cierre en HTML (tabla de datos + análisis IA).
+function descargarCierreHTML() {
+  const mes = cierreAnalizadoMes;
+  if (!mes) { mostrarToast('⚠️ Primero genera un análisis de cierre'); return; }
+  const d = calcularDatosCierre(mes);
+  const analisis = ultimaRespuestaAsistente();
+  if (!analisis) { mostrarToast('⚠️ Aún no hay análisis para descargar'); return; }
+
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const hoy = new Date().toISOString().split('T')[0];
+
+  // Tabla operativa
+  const filasOp = (grupos) => grupos.map(g => {
+    const subs = g.subgrupos.map(s => {
+      const cls = s.desv > 0 ? 'rojo' : (s.desv < 0 ? 'verde' : '');
+      return `<tr><td class="sub">${esc(s.sub)}</td><td class="n">${fmt(s.ppto)}</td><td class="n">${fmt(s.real)}</td><td class="n ${cls}">${fmt(s.desv)}</td></tr>`;
+    }).join('');
+    return `<tr class="grupo"><td>${esc(g.grupo)}</td><td class="n">${fmt(g.total)}</td><td class="n">${fmt(g.totalReal)}</td><td></td></tr>${subs}`;
+  }).join('');
+
+  // Tabla provisiones
+  const filasProv = d.provisiones.map(p => {
+    const alerta = p.excedeTope ? ` <span class="rojo">⚠ excede tope en ${fmt(p.excedente)}</span>` : '';
+    const sobregiro = p.sobregiro > 0 ? `<span class="rojo">sobregiro ${fmt(p.sobregiro)}</span>` : fmt(p.sobrante);
+    return `<tr><td>${esc(p.subgrupo)}</td><td class="n">${fmt(p.ppto)}</td><td class="n">${fmt(p.real)}</td><td class="n">${sobregiro}</td><td class="n">${fmt(p.tope)}</td><td class="n">${fmt(p.acumuladoSig)}${alerta}</td></tr>`;
+  }).join('');
+
+  // Análisis: convertir saltos de línea a párrafos
+  const analisisHTML = esc(analisis).split('\n').map(l => l.trim() ? `<p>${l}</p>` : '').join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<title>Cierre ${mes} — ICG Flujo de Caja</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 820px; margin: 0 auto; padding: 32px; color: #1a2332; background: #fff; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .meta { color: #667; font-size: 13px; margin-bottom: 24px; }
+  h2 { font-size: 16px; margin-top: 28px; border-bottom: 2px solid #e0e4ea; padding-bottom: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+  th { text-align: left; color: #667; font-weight: 600; padding: 6px 8px; border-bottom: 1px solid #e0e4ea; font-size: 12px; }
+  td { padding: 5px 8px; border-bottom: 1px solid #f0f2f5; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  td.sub { padding-left: 22px; color: #445; }
+  tr.grupo td { font-weight: 600; background: #f7f9fb; }
+  .verde { color: #1a8a4a; }
+  .rojo { color: #c0392b; }
+  .resumen { display: flex; gap: 24px; margin: 16px 0; }
+  .resumen div { background: #f7f9fb; padding: 12px 16px; border-radius: 8px; }
+  .resumen .lbl { font-size: 11px; color: #667; text-transform: uppercase; }
+  .resumen .val { font-size: 18px; font-weight: 700; }
+  .analisis { margin-top: 12px; }
+  .analisis p { margin: 8px 0; line-height: 1.5; }
+  footer { margin-top: 36px; color: #99a; font-size: 11px; border-top: 1px solid #e0e4ea; padding-top: 12px; }
+</style></head><body>
+<h1>Cierre de mes — ${mes}</h1>
+<div class="meta">ICG Flujo de Caja · Documento generado el ${hoy}</div>
+
+<div class="resumen">
+  <div><div class="lbl">Saldo inicio de mes</div><div class="val">${fmt(d.saldoInicial)}</div></div>
+  <div><div class="lbl">Saldo fin de mes (proy.)</div><div class="val">${fmt(d.saldoFinal)}</div></div>
+  <div><div class="lbl">Neto operativo real</div><div class="val">${fmt(d.op.netoReal)}</div></div>
+  <div><div class="lbl">Neto financiero real</div><div class="val">${fmt(d.fin.netoReal)}</div></div>
+</div>
+
+<h2>Flujo operativo (real vs presupuesto)</h2>
+<table><thead><tr><th>Rubro</th><th style="text-align:right">Ppto</th><th style="text-align:right">Real</th><th style="text-align:right">Desv</th></tr></thead><tbody>
+<tr class="grupo"><td>INGRESOS</td><td class="n">${fmt(d.op.ingresos)}</td><td class="n">${fmt(d.op.ingresosReal)}</td><td></td></tr>
+${filasOp(d.gruposIng) || '<tr><td colspan="4" class="sub">(sin ingresos)</td></tr>'}
+<tr class="grupo"><td>EGRESOS</td><td class="n">${fmt(d.op.egresos)}</td><td class="n">${fmt(d.op.egresosReal)}</td><td></td></tr>
+${filasOp(d.gruposEgr) || '<tr><td colspan="4" class="sub">(sin egresos)</td></tr>'}
+</tbody></table>
+
+<h2>Flujo financiero (proyectado vs real)</h2>
+<table><thead><tr><th>Concepto</th><th style="text-align:right">Proyectado</th><th style="text-align:right">Real</th></tr></thead><tbody>
+<tr><td>Nuevos créditos (entra caja)</td><td class="n">${fmt(d.fin.nuevosCreditos)}</td><td class="n">${fmt(d.fin.nuevosCreditosReal)}</td></tr>
+<tr><td>Abonos a capital (sale caja)</td><td class="n">${fmt(d.fin.abonoCapital)}</td><td class="n">${fmt(d.fin.abonoCapitalReal)}</td></tr>
+<tr><td>Costo financiero (interés)</td><td class="n">${fmt(d.fin.costoFinanciero)}</td><td class="n">${fmt(d.fin.costoFinancieroReal)}</td></tr>
+<tr class="grupo"><td>Neto financiero</td><td class="n">${fmt(d.fin.neto)}</td><td class="n">${fmt(d.fin.netoReal)}</td></tr>
+</tbody></table>
+
+<h2>Provisiones rodantes</h2>
+<table><thead><tr><th>Rubro</th><th style="text-align:right">Ppto</th><th style="text-align:right">Real</th><th style="text-align:right">Sobrante</th><th style="text-align:right">Tope</th><th style="text-align:right">Acum. ${d.mesSig} si traslada</th></tr></thead><tbody>
+${filasProv || '<tr><td colspan="6" class="sub">(sin rubros de provisión)</td></tr>'}
+</tbody></table>
+
+<h2>Análisis</h2>
+<div class="analisis">${analisisHTML}</div>
+
+<footer>Generado por ICG Flujo de Caja — análisis de cierre asistido por IA. Las cifras provienen del presupuesto y el calendario de deuda al momento de la generación. El análisis es una guía; las decisiones de traslado de provisión las aprueba Nacho.</footer>
+</body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Cierre_${mes}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  mostrarToast('✓ Documento de cierre descargado');
 }
 
 function enviarSugerencia(texto) {
