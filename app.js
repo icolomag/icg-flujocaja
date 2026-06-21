@@ -3864,14 +3864,31 @@ function calcularFlujoFinanciero(mesYYYYMM) {
     netoReal: 0
   };
 
-  // 1. PROYECTADO: lo que vence este mes según Calendario_Deuda
+  // 1. PROYECTADO: el desembolso TOTAL de deuda que vence este mes según
+  // Calendario_Deuda. Cuenta cuotas Pendiente Y Pagada (todas las que vencen
+  // el mes), para que la proyección no se infle a medida que se pagan cuotas
+  // durante el mes en curso. Las Anuladas no cuentan.
+  // EXCEPCIÓN (idea 2): una compra a UNA cuota SIN interés cuyo mes de compra
+  // es el MISMO mes en que vence ya está reflejada en el flujo OPERATIVO de ese
+  // mes (es una compra al contado con TC de paso). Contarla aquí también sería
+  // doble conteo, así que se excluye. Si el mes de compra es ANTERIOR al de
+  // vencimiento (compra de un mes que se paga al siguiente), SÍ cuenta: esa
+  // salida de caja no está en el operativo del mes de vencimiento.
   if (estado.cuotasTC) {
     estado.cuotasTC.forEach(c => {
-      if (c.estado !== 'Pendiente' || !c.fechaVencimiento) return;
+      if (c.estado === 'Anulada' || !c.fechaVencimiento) return;
       if (c.fechaVencimiento.substring(0, 7) !== mesYYYYMM) return;
 
       const capital = c.capitalCuota || 0;
       const interes = c.interesCuota || 0;
+
+      // Exclusión idea 2: compra a 1 cuota, sin interés, comprada el mismo mes
+      // en que vence → ya está en el operativo → no contar en el financiero.
+      const esUnaCuotaSinInteres = (c.totalCuotas || 0) <= 1 && interes === 0;
+      const mesCompra = (c.fechaCompra || '').substring(0, 7);
+      const mismoMes = mesCompra && mesCompra === mesYYYYMM;
+      if (esUnaCuotaSinInteres && mismoMes) return;
+
       res.abonoCapital += capital;
       res.costoFinanciero += interes;
 
