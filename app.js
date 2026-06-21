@@ -472,7 +472,7 @@ async function cargarDatos() {
   try {
     const [filasProductos, filasGrupos, filasTx, filasPpto, filasContexto, filasConfig, filasCuotas] = await Promise.all([
       leerHoja('Productos!A2:R'),
-      leerHoja('Grupos!A2:G'),
+      leerHoja('Grupos!A2:I'),
       leerHoja('Transacciones!A2:M'),
       leerHoja('Presupuesto!A2:F'),
       leerHoja('Contexto!A2:C'),
@@ -495,7 +495,7 @@ async function cargarDatos() {
       exentoGMF: (f[17] || '').toString().toUpperCase() === 'TRUE'
     }));
 
-    estado.grupos = filasGrupos.map(f => ({ tipo: f[0], grupo: f[1], subgrupo: f[2], cuentaDestino: f[3] || '', esCostoFinanciero: (f[4] || '').toString().toUpperCase() === 'SI', esRendimientoLP: (f[5] || '').toString().toUpperCase() === 'SI', idSubgrupo: (f[6] || '').toString().trim() }));
+    estado.grupos = filasGrupos.map(f => ({ tipo: f[0], grupo: f[1], subgrupo: f[2], cuentaDestino: f[3] || '', esCostoFinanciero: (f[4] || '').toString().toUpperCase() === 'SI', esRendimientoLP: (f[5] || '').toString().toUpperCase() === 'SI', idSubgrupo: (f[6] || '').toString().trim(), esProvision: (f[7] || '').toString().toUpperCase() === 'SI', topeProvision: parseFloat(f[8]) || 0 }));
     estado.transacciones = filasTx.map(f => ({
       id: f[0], fecha: f[1], tipo: f[2], grupo: f[3], subgrupo: f[4],
       origen: f[5], destino: f[6], monto: parseFloat(f[7]) || 0,
