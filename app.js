@@ -477,7 +477,7 @@ async function cargarDatos() {
       leerHoja('Presupuesto!A2:F'),
       leerHoja('Contexto!A2:C'),
       leerHoja('Config!A2:B'),
-      leerHoja('Calendario_Deuda!A2:M')
+      leerHoja('Calendario_Deuda!A2:N')
     ]);
 
     estado.productos = filasProductos.map(f => ({
@@ -520,7 +520,8 @@ async function cargarDatos() {
       capitalCuota: parseFloat(f[8]) || 0,
       interesCuota: parseFloat(f[9]) || 0,
       fechaVencimiento: f[10] || '', estado: f[11] || 'Pendiente',
-      idTxPago: f[12] || ''
+      idTxPago: f[12] || '',
+      fechaCompra: f[13] || ''
     }));
 
     estado.config = {};
