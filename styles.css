@@ -472,6 +472,13 @@ tr:hover td { background: var(--bg2); }
   transition: all 0.2s;
 }
 .sugerencia-btn:hover { border-color: var(--acento); color: var(--texto); }
+.sugerencia-cierre {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: #fff;
+  font-weight: 600;
+}
+.sugerencia-cierre:hover { opacity: 0.9; color: #fff; }
 
 /* PROYECCIÓN */
 .proyeccion-escenarios {
@@ -966,34 +973,6 @@ tr:hover td { background: var(--bg2); }
   margin-top: 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-
-/* Línea comparativa (presupuestado/proyectado) bajo el valor real en las tarjetas */
-.flujo-card-comp {
-  font-size: 12px;
-  color: var(--texto2);
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px dashed var(--borde);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Doble valor (proyectado tenue + real destacado) en las barras de bloque */
-.bloque-doble {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  font-variant-numeric: tabular-nums;
-}
-.bloque-doble .proy {
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--texto2);
-}
-.bloque-doble .proy.verde { color: var(--verde); }
-.bloque-doble .proy.rojo { color: var(--rojo); }
-.bloque-doble .real {
-  font-weight: 600;
 }
 
 /* Tabla de la ola (5 columnas) */
