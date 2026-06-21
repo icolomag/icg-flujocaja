@@ -968,6 +968,34 @@ tr:hover td { background: var(--bg2); }
   letter-spacing: 0.5px;
 }
 
+/* Línea comparativa (presupuestado/proyectado) bajo el valor real en las tarjetas */
+.flujo-card-comp {
+  font-size: 12px;
+  color: var(--texto2);
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--borde);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Doble valor (proyectado tenue + real destacado) en las barras de bloque */
+.bloque-doble {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.bloque-doble .proy {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--texto2);
+}
+.bloque-doble .proy.verde { color: var(--verde); }
+.bloque-doble .proy.rojo { color: var(--rojo); }
+.bloque-doble .real {
+  font-weight: 600;
+}
+
 /* Tabla de la ola (5 columnas) */
 .flujo-fila.ola-grid {
   display: grid;
