@@ -479,6 +479,18 @@ tr:hover td { background: var(--bg2); }
   font-weight: 600;
 }
 .sugerencia-cierre:hover { opacity: 0.9; color: #fff; }
+.btn-descargar-cierre {
+  background: var(--bg2);
+  border: 1px solid var(--acento);
+  color: var(--acento);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-descargar-cierre:hover { background: var(--acento); color: #fff; }
 
 /* PROYECCIÓN */
 .proyeccion-escenarios {
