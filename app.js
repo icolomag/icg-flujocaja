@@ -3675,7 +3675,8 @@ async function generarCuotasDisposicion(idTx, datos) {
     const idCuota = `${idCompra}-${String(i + 1).padStart(2, '0')}`;
     await escribirFila('Calendario_Deuda', [
       idCuota, idCompra, idTx, 'TC', datos.origen, datos.descripcion,
-      i + 1, totalCuotas, tabla[i].capital, tabla[i].interes, fechaVenc, 'Pendiente', ''
+      i + 1, totalCuotas, tabla[i].capital, tabla[i].interes, fechaVenc, 'Pendiente', '',
+      datos.fecha
     ]);
   }
 }
@@ -3722,7 +3723,8 @@ async function generarCuotasTC(idTx, datos) {
     const idCuota = `${idCompra}-${String(i + 1).padStart(2, '0')}`;
     await escribirFila('Calendario_Deuda', [
       idCuota, idCompra, idTx, 'TC', datos.producto, datos.descripcion,
-      i + 1, totalCuotas, tabla[i].capital, tabla[i].interes, fechaVenc, 'Pendiente', ''
+      i + 1, totalCuotas, tabla[i].capital, tabla[i].interes, fechaVenc, 'Pendiente', '',
+      datos.fecha
     ]);
   }
 }
