@@ -2487,6 +2487,143 @@ GESTIÓN DE CONSIDERACIONES: Nacho mantiene una lista de "consideraciones y deci
   }
 }
 
+// ── ANÁLISIS DE CIERRE (Pendiente #5 Parte A) ────────────────────────
+// Arma un paquete de datos del mes a analizar (operativo real vs presupuesto,
+// financiero proyectado vs real, y provisiones rodantes con sus sobrantes) y lo
+// pasa a la IA como un mensaje enriquecido. Solo lectura: no escribe nada.
+
+// Devuelve el mes (YYYY-MM) del último cierre registrado en Config.
+function mesUltimoCierre() {
+  const cierre = estado.ultimoCierre || '2026-05-31';
+  return cierre.substring(0, 7);
+}
+
+// Mes siguiente a un YYYY-MM dado.
+function mesSiguiente(mesYYYYMM) {
+  const [a, m] = mesYYYYMM.split('-').map(Number);
+  const d = new Date(a, m, 1); // m (1-12) como índice 0-11 = mes siguiente
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// Construye el texto del paquete de cierre que ve la IA.
+function construirPaqueteCierre(mesYYYYMM) {
+  const op = calcularFlujoOperativo(mesYYYYMM);
+  const fin = calcularFlujoFinanciero(mesYYYYMM);
+  const mesSig = mesSiguiente(mesYYYYMM);
+  const opSig = calcularFlujoOperativo(mesSig);
+
+  // Saldo de caja inicio/fin del mes analizado. Se calcula directo (no se busca
+  // en la ola, porque la ola arranca en el mes corriente y el mes cerrado suele
+  // quedar fuera). Inicio = saldo de cierre disponible; fin = inicio + flujo neto
+  // del mes (operativo presupuestado + financiero proyectado), coherente con la ola.
+  const saldoInicialNum = estado.productos
+    .filter(p => p.disponible && p.saldoCierre >= 0)
+    .reduce((s, p) => s + p.saldoCierre, 0);
+  const saldoFinalNum = saldoInicialNum + op.neto + fin.neto;
+  const saldoIni = fmt(saldoInicialNum);
+  const saldoFin = fmt(saldoFinalNum);
+
+  // ── BLOQUE 2: operativo real vs presupuesto, por grupo y subgrupo ──
+  let lineasIng = [], lineasEgr = [];
+  Object.entries(op.grupos).forEach(([grupo, g]) => {
+    const subs = Object.entries(g.subgrupos)
+      .map(([sub, v]) => {
+        const desv = v.real - v.ppto;
+        return `    ${sub}: ppto ${fmt(v.ppto)} | real ${fmt(v.real)} | desv ${fmt(desv)}`;
+      }).join('\n');
+    const bloque = `  ${grupo} (ppto ${fmt(g.total)} / real ${fmt(g.totalReal)}):\n${subs}`;
+    if (g.tipo === 'ingreso') lineasIng.push(bloque);
+    else lineasEgr.push(bloque);
+  });
+
+  // ── BLOQUE 4: provisiones rodantes ──
+  const provs = estado.grupos.filter(g => g.esProvision);
+  let lineasProv = provs.map(p => {
+    // real y ppto del subgrupo en el mes analizado
+    let ppto = 0, real = 0;
+    const gOp = op.grupos[p.grupo];
+    if (gOp && gOp.subgrupos[p.subgrupo]) {
+      ppto = gOp.subgrupos[p.subgrupo].ppto;
+      real = gOp.subgrupos[p.subgrupo].real;
+    }
+    const sobrante = Math.max(0, ppto - real);
+    const sobregiro = real > ppto ? real - ppto : 0;
+    // lo ya presupuestado en el mes siguiente para ese rubro
+    let pptoSig = 0;
+    const gSig = opSig.grupos[p.grupo];
+    if (gSig && gSig.subgrupos[p.subgrupo]) pptoSig = gSig.subgrupos[p.subgrupo].ppto;
+    const acumuladoSig = pptoSig + sobrante;
+    const tope = p.topeProvision || 0;
+    const excedeTope = tope > 0 && acumuladoSig > tope;
+
+    let linea = `  ${p.grupo} > ${p.subgrupo}: ppto ${fmt(ppto)} | real ${fmt(real)} | sobrante ${fmt(sobrante)}`;
+    if (sobregiro > 0) linea += ` | SOBREGIRO ${fmt(sobregiro)} (gastó de más)`;
+    linea += `\n     tope acumulación: ${fmt(tope)} | ya presupuestado en ${mesSig}: ${fmt(pptoSig)}`;
+    linea += `\n     si se traslada el sobrante → ${mesSig} quedaría en ${fmt(acumuladoSig)}`;
+    if (excedeTope) linea += ` ⚠️ EXCEDE el tope de ${fmt(tope)} (excedente ${fmt(acumuladoSig - tope)})`;
+    return linea;
+  }).join('\n\n');
+
+  // ── BLOQUE 5: notas de contexto (situación vigente, atemporal) ──
+  let notas = '';
+  if (estado.contexto && estado.contexto.length) {
+    notas = estado.contexto.map(c => `- [${c.categoria}] ${c.consideracion}`).join('\n');
+  }
+
+  return `=== DATOS DEL CIERRE A ANALIZAR ===
+
+MES ANALIZADO: ${mesYYYYMM}
+Saldo de caja inicio de mes: ${saldoIni || 'n/d'}
+Saldo de caja fin de mes (proyectado): ${saldoFin || 'n/d'}
+
+── FLUJO OPERATIVO (real vs presupuesto) ──
+INGRESOS:
+${lineasIng.join('\n') || '  (sin ingresos)'}
+Total ingresos: ppto ${fmt(op.ingresos)} | real ${fmt(op.ingresosReal)}
+
+EGRESOS:
+${lineasEgr.join('\n') || '  (sin egresos)'}
+Total egresos: ppto ${fmt(op.egresos)} | real ${fmt(op.egresosReal)}
+
+NETO OPERATIVO: ppto ${fmt(op.neto)} | real ${fmt(op.netoReal)}
+
+── FLUJO FINANCIERO (proyectado vs real) ──
+Nuevos créditos (entra caja): proy ${fmt(fin.nuevosCreditos)} | real ${fmt(fin.nuevosCreditosReal)}
+Abonos a capital (sale caja, no es gasto): proy ${fmt(fin.abonoCapital)} | real ${fmt(fin.abonoCapitalReal)}
+Costo financiero (intereses, sí es gasto): proy ${fmt(fin.costoFinanciero)} | real ${fmt(fin.costoFinancieroReal)}
+Aportes inversión LP (sale caja): real ${fmt(fin.aportesLPReal)}
+Rendimientos LP (no toca caja): real ${fmt(fin.rendimientoLPReal)}
+NETO FINANCIERO: proy ${fmt(fin.neto)} | real ${fmt(fin.netoReal)}
+
+── PROVISIONES RODANTES (sobrante = ppto − real, mín 0) ──
+${lineasProv || '  (sin rubros de provisión marcados)'}
+
+── SITUACIÓN VIGENTE DE NACHO (notas de contexto) ──
+${notas || '  (sin notas de contexto)'}`;
+}
+
+// Dispara el análisis del último mes cerrado en el chat del asistente.
+function analizarCierre() {
+  if (!estado.grupos || !estado.grupos.length) {
+    mostrarToast('⚠️ Datos aún no cargados, intenta en un momento');
+    return;
+  }
+  const mes = mesUltimoCierre();
+  const paquete = construirPaqueteCierre(mes);
+
+  const instruccion = `Analiza el cierre del mes ${mes}. Compara el real ejecutado contra el presupuesto operativo y contra el calendario de deuda (flujo financiero). Explica con criterio de tesorería las desviaciones MÁS relevantes (no listes todo, prioriza lo que importa y por qué). Señala explícitamente cualquier rubro que se haya sobregirado (gastó más de lo presupuestado).
+
+Para los rubros de PROVISIÓN rodante: para cada uno indica el sobrante, y muéstrame las consecuencias de trasladarlo al mes siguiente frente a su tope de acumulación (cómo quedaría el acumulado, si excede el tope y en cuánto). Recomienda cuánto trasladar de cada uno, pero deja claro que la decisión del monto es mía.
+
+Cierra con conclusiones accionables, considerando los objetivos y la situación financiera vigente que aparecen en mis notas de contexto. Sé concreto y directo.
+
+${paquete}`;
+
+  // Cambiar a la pestaña del asistente y disparar el análisis en el chat
+  cambiarVista('asistente');
+  enviarMensajeChat(instruccion);
+}
+
 function enviarSugerencia(texto) {
   enviarMensajeChat(texto);
 }
