@@ -2366,6 +2366,84 @@ function construirContextoFinanciero() {
     notasContexto = estado.contexto.map(c => `- [${c.categoria}] ${c.consideracion}`).join('\n');
   }
 
+  // ── BLOQUE NUEVO 1: FOTO DE LA DEUDA (resumen por producto, no las 462 cuotas) ──
+  // Para cada producto de deuda: saldo actual (negativo en el sistema), cuotas
+  // pendientes que le quedan y la suma de capital pendiente.
+  let resumenDeuda = '';
+  const idsDeudaCtx = estado.productos
+    .filter(p => {
+      const t = (p.tipo || '').toLowerCase();
+      return t.includes('crédito') || t.includes('credito') ||
+             t.includes('hipotec') || t.includes('libranza') ||
+             t.includes('pasivo') || t.includes('tarjeta');
+    });
+  if (idsDeudaCtx.length && estado.cuotasTC) {
+    const lineas = idsDeudaCtx.map(p => {
+      const pendientes = estado.cuotasTC.filter(c =>
+        c.productoTC === p.id && c.estado === 'Pendiente');
+      const capitalPend = pendientes.reduce((s, c) => s + (c.capitalCuota || 0), 0);
+      const interesPend = pendientes.reduce((s, c) => s + (c.interesCuota || 0), 0);
+      const numPend = pendientes.length;
+      let detalle = `${p.nombre} (${p.entidad}): saldo ${fmt(p.saldoActual)}`;
+      if (numPend > 0) {
+        detalle += ` — ${numPend} cuotas pendientes, capital pendiente ${fmt(capitalPend)}, interés pendiente ${fmt(interesPend)}`;
+      } else {
+        detalle += ` — sin cuotas pendientes en el calendario`;
+      }
+      return detalle;
+    });
+    resumenDeuda = lineas.join('\n');
+  }
+
+  // ── BLOQUE NUEVO 2: FLUJO DEL MES EN CURSO (operativo + financiero) ──
+  // Lo mismo que ve la pestaña "vs Presupuesto", en texto: proyectado y real.
+  let resumenFlujoMes = '';
+  try {
+    const f = calcularFlujosMes(mesActual);
+    const op = f.operativo;
+    const fin = f.financiero;
+    resumenFlujoMes =
+`OPERATIVO (lo que toca la caja por consumo/ingreso):
+- Ingresos: presupuestado ${fmt(op.ingresos)} | real ${fmt(op.ingresosReal)}
+- Egresos: presupuestado ${fmt(op.egresos)} | real ${fmt(op.egresosReal)}
+- Neto operativo: presupuestado ${fmt(op.neto)} | real ${fmt(op.netoReal)}
+
+FINANCIERO (movimientos entre caja y deuda/inversión LP):
+- Nuevos créditos (entra caja): proyectado ${fmt(fin.nuevosCreditos)} | real ${fmt(fin.nuevosCreditosReal)}
+- Abono a capital (sale caja, NO es gasto): proyectado ${fmt(fin.abonoCapital)} | real ${fmt(fin.abonoCapitalReal)}
+- Costo financiero (intereses/seguros, SÍ es gasto): proyectado ${fmt(fin.costoFinanciero)} | real ${fmt(fin.costoFinancieroReal)}
+- Aportes inversión LP (sale caja): real ${fmt(fin.aportesLPReal)}
+- Retiros inversión LP (entra caja): real ${fmt(fin.retirosLPReal)}
+- Rendimientos LP (no toca caja, informativo): real ${fmt(fin.rendimientoLPReal)}
+- Neto financiero: proyectado ${fmt(fin.neto)} | real ${fmt(fin.netoReal)}
+
+FLUJO NETO DEL MES: proyectado ${fmt(f.flujoNeto)} | real ${fmt(f.flujoNetoReal)}`;
+  } catch (e) {
+    resumenFlujoMes = 'No disponible';
+  }
+
+  // ── BLOQUE NUEVO 3: LA OLA — proyección de caja 12 meses ──
+  // El saldo de caja proyectado mes a mes. Es lo que más le faltaba al asistente.
+  let resumenOla = '';
+  try {
+    const proy = calcularProyeccionCaja(12);
+    const filas = proy.meses.map(m => {
+      const marca = m.enRojo ? ' [EN ROJO]' : '';
+      return `${m.mes}: saldo inicial ${fmt(m.saldoInicial)}, operativo ${fmt(m.operativo)}, financiero ${fmt(m.financiero)}, flujo neto ${fmt(m.flujoNeto)} → saldo final ${fmt(m.saldoFinal)}${marca}`;
+    }).join('\n');
+    // Punto más bajo del ciclo (techo de necesidad de caja)
+    let puntoBajo = proy.meses[0];
+    proy.meses.forEach(m => { if (m.saldoFinal < puntoBajo.saldoFinal) puntoBajo = m; });
+    resumenOla =
+`Saldo de partida (inicio del mes corriente): ${fmt(proy.saldoPartida)}
+Punto más bajo del ciclo: ${fmt(puntoBajo.saldoFinal)} en ${puntoBajo.mes}
+
+Mes a mes:
+${filas}`;
+  } catch (e) {
+    resumenOla = 'No disponible';
+  }
+
   return `FECHA HOY: ${hoy.toISOString().split('T')[0]}
 
 PATRIMONIO NETO:
@@ -2390,6 +2468,15 @@ ${txs || 'Sin transacciones registradas'}
 
 PRESUPUESTO PROYECTADO (próximos 12 meses):
 ${resumenPpto || 'Sin presupuesto cargado'}
+
+FOTO DE LA DEUDA (resumen por producto, desde el calendario de deuda):
+${resumenDeuda || 'Sin deuda registrada en el calendario'}
+
+FLUJO DEL MES EN CURSO ${mesActual} (operativo vs financiero, proyectado y real):
+${resumenFlujoMes}
+
+PROYECCIÓN DE CAJA 12 MESES — "LA OLA" (saldo de caja proyectado mes a mes; usa el presupuesto como plan, no el real):
+${resumenOla}
 
 CONSIDERACIONES Y DECISIONES ACTUALES (mantenidas por Nacho, son verdades vigentes sobre su situación):
 ${notasContexto || 'Sin consideraciones registradas'}`;
