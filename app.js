@@ -3613,6 +3613,31 @@ function inicializarCierre() {
     </div>
   `).join('');
 
+  // Tarjetas de crédito (conciliación) — Pieza 2
+  const tarjetas = estado.productos.filter(p =>
+    p.tipo === 'Tarjeta Crédito' && p.estado === 'Activa'
+  );
+  // La sección de TC se inyecta una sola vez, antes de la sección de cuentas.
+  if (!document.getElementById('cierre-tarjetas')) {
+    const secTC = document.createElement('div');
+    secTC.className = 'cierre-seccion';
+    secTC.innerHTML = `
+      <h3>💳 Tarjetas de crédito (conciliación)</h3>
+      <p style="color:var(--texto2);font-size:12px;margin-bottom:10px">
+        Lo que la app calcula que debes vs el saldo real del extracto. Si no cuadran, casi siempre falta registrar un consumo: decides si lo revisas o lo llevas a ajuste.
+      </p>
+      <div id="cierre-tarjetas"></div>`;
+    const secCuentas = document.getElementById('cierre-cuentas').closest('.cierre-seccion');
+    secCuentas.parentElement.insertBefore(secTC, secCuentas);
+  }
+  document.getElementById('cierre-tarjetas').innerHTML = tarjetas.map(p => `
+    <div class="cierre-linea" data-id="${p.id}">
+      <span class="cierre-nombre">${p.nombre}</span>
+      <span class="cierre-saldo-actual">App: debes ${fmt(Math.abs(p.saldoActual))}</span>
+      <input type="number" class="cierre-input-cuenta" placeholder="Saldo real del extracto (lo que debes)" />
+    </div>
+  `).join('');
+
   // Listeners
   ['btn-cierre-calcular','btn-cierre-guardar','btn-cierre-cancelar'].forEach(id => {
     const b = document.getElementById(id);
@@ -3709,6 +3734,34 @@ function calcularCierre() {
     } else {
       const signo = diferencia > 0 ? '+' : '';
       html += `<div>🏦 <strong>${prod.nombre}</strong>: real ${fmt(saldoReal)} vs app ${fmt(saldoCalculado)} → <span class="rend-negativo">diferencia ${signo}${fmt(diferencia)}</span></div>`;
+    }
+  });
+
+  // Tarjetas de crédito: conciliación (la deuda se guarda en negativo) — Pieza 2
+  document.querySelectorAll('#cierre-tarjetas .cierre-linea').forEach(linea => {
+    const id = linea.dataset.id;
+    const inp = linea.querySelector('input');
+    const saldoRealAbs = parseFloat(inp.value);
+    if (isNaN(saldoRealAbs)) return; // si no ingresó saldo, no la concilia
+    const prod = estado.productos.find(p => p.id === id);
+    const saldoReal = -Math.abs(saldoRealAbs); // la deuda vive en negativo
+    const saldoCalculado = prod.saldoActual;
+    const diferencia = saldoReal - saldoCalculado;
+
+    // Se marca como 'cuenta' para reusar el mismo motor de ajuste/congelado.
+    actualizaciones.push({
+      id, nombre: prod.nombre, tipo: 'cuenta',
+      saldoFinal: saldoReal, saldoCalculado, diferencia
+    });
+
+    if (Math.abs(diferencia) < 1) {
+      html += `<div>💳 <strong>${prod.nombre}</strong>: debes ${fmt(saldoRealAbs)} — <span class="rend-positivo">cuadra ✓</span></div>`;
+    } else {
+      const signo = diferencia > 0 ? '+' : '';
+      const pista = diferencia < 0
+        ? ' — falta registrar un consumo'
+        : ' — falta registrar un pago o hay un consumo de más';
+      html += `<div>💳 <strong>${prod.nombre}</strong>: real ${fmt(Math.abs(saldoReal))} vs app ${fmt(Math.abs(saldoCalculado))} → <span class="rend-negativo">diferencia ${signo}${fmt(diferencia)}</span>${pista}</div>`;
     }
   });
 
