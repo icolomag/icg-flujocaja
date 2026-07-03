@@ -3461,6 +3461,107 @@ function resetNomina() {
 // ── FORMULARIO DE CIERRE DE MES ───────────────────────────────────────
 let cierreCalculado = null;
 
+// ── BORRADOR DE CONCILIACIÓN (Pieza 1) ────────────────────────────────
+// Guarda en la hoja Conciliaciones los saldos que se van digitando en el
+// formulario de cierre, para poder retomar el proceso en otra sentada.
+// No congela nada ni escribe ajustes: solo persiste lo digitado (Estado=Borrador).
+
+// Recolecta los saldos digitados en el formulario de cierre: [{id, saldoReal}].
+function recolectarSaldosCierre() {
+  const saldos = [];
+  document.querySelectorAll('#vista-cierre .cierre-linea').forEach(linea => {
+    const id = linea.dataset.id;
+    const inp = linea.querySelector('input');
+    if (!inp) return;
+    const val = parseFloat(inp.value);
+    if (isNaN(val)) return;
+    saldos.push({ id, saldoReal: val });
+  });
+  return saldos;
+}
+
+// Guarda (o actualiza) el borrador del mes seleccionado en la hoja Conciliaciones.
+async function guardarBorradorConciliacion() {
+  const periodo = document.getElementById('cierre-mes').value;
+  if (!periodo) { mostrarToast('Selecciona el mes'); return; }
+  const saldos = recolectarSaldosCierre();
+  if (!saldos.length) { mostrarToast('Digita al menos un saldo'); return; }
+
+  const btn = document.getElementById('btn-cierre-borrador');
+  let textoOrig = '';
+  if (btn) { textoOrig = btn.textContent; btn.disabled = true; btn.textContent = 'Guardando...'; }
+
+  mostrarSpinner(true);
+  try {
+    const filas = await leerHoja('Conciliaciones!A2:H');
+    const hoy = new Date().toISOString().substring(0, 10);
+
+    for (const s of saldos) {
+      // Buscar fila existente del mismo periodo + producto que siga en Borrador.
+      const idx = filas.findIndex(f =>
+        (f[1] || '') === periodo && (f[2] || '') === s.id && (f[4] || '') !== 'Conciliado'
+      );
+      if (idx >= 0) {
+        const fila = idx + 2; // la lectura arranca en A2
+        await actualizarCelda(`Conciliaciones!D${fila}`, s.saldoReal);
+        await actualizarCelda(`Conciliaciones!H${fila}`, hoy);
+      } else {
+        await escribirFila('Conciliaciones', [
+          'CN' + Date.now() + Math.floor(Math.random() * 100),
+          periodo, s.id, s.saldoReal, 'Borrador', '', '', hoy
+        ]);
+      }
+    }
+    mostrarSpinner(false);
+    if (btn) { btn.disabled = false; btn.textContent = textoOrig; }
+    mostrarToast('✓ Borrador guardado — puedes retomar el cierre luego');
+  } catch (e) {
+    mostrarSpinner(false);
+    if (btn) { btn.disabled = false; btn.textContent = textoOrig; }
+    mostrarToast('Error al guardar borrador: ' + e.message);
+    console.error(e);
+  }
+}
+
+// Rellena los campos del formulario con el borrador guardado del periodo dado.
+async function cargarBorradorConciliacion(periodo) {
+  if (!periodo) return;
+  try {
+    const filas = await leerHoja('Conciliaciones!A2:H');
+    const delMes = filas.filter(f =>
+      (f[1] || '') === periodo && (f[4] || '') === 'Borrador'
+    );
+    if (!delMes.length) return;
+    let cargados = 0;
+    delMes.forEach(f => {
+      const id = f[2];
+      const saldo = f[3];
+      const linea = document.querySelector(`#vista-cierre .cierre-linea[data-id="${id}"]`);
+      if (linea) {
+        const inp = linea.querySelector('input');
+        if (inp) { inp.value = saldo; cargados++; }
+      }
+    });
+    if (cargados) mostrarToast(`↩️ Borrador cargado (${cargados} saldo${cargados > 1 ? 's' : ''})`);
+  } catch (e) {
+    console.error('No se pudo cargar el borrador:', e);
+  }
+}
+
+// Marca como Conciliado el borrador del periodo (se llama al cerrar el mes).
+async function limpiarBorradorConciliacion(periodo) {
+  try {
+    const filas = await leerHoja('Conciliaciones!A2:H');
+    for (let i = 0; i < filas.length; i++) {
+      if ((filas[i][1] || '') === periodo && (filas[i][4] || '') === 'Borrador') {
+        await actualizarCelda(`Conciliaciones!E${i + 2}`, 'Conciliado');
+      }
+    }
+  } catch (e) {
+    console.error('No se pudo marcar el borrador como conciliado:', e);
+  }
+}
+
 function inicializarCierre() {
   // Poblar selector de mes
   const sel = document.getElementById('cierre-mes');
@@ -3520,6 +3621,27 @@ function inicializarCierre() {
   document.getElementById('btn-cierre-calcular').addEventListener('click', calcularCierre);
   document.getElementById('btn-cierre-cancelar').addEventListener('click', resetCierre);
   document.getElementById('btn-cierre-guardar').addEventListener('click', guardarCierre);
+
+  // Botón de guardado provisional (borrador) — se inyecta una sola vez.
+  if (!document.getElementById('btn-cierre-borrador')) {
+    const btnBorr = document.createElement('button');
+    btnBorr.id = 'btn-cierre-borrador';
+    btnBorr.className = 'btn-secundario';
+    btnBorr.textContent = '💾 Guardar borrador';
+    btnBorr.addEventListener('click', guardarBorradorConciliacion);
+    const calc = document.getElementById('btn-cierre-calcular');
+    calc.parentElement.insertBefore(btnBorr, calc);
+  }
+
+  // Al cambiar de mes: limpiar los campos y cargar el borrador de ese mes.
+  const selMes = document.getElementById('cierre-mes');
+  selMes.onchange = () => {
+    document.querySelectorAll('#vista-cierre input').forEach(i => i.value = '');
+    cargarBorradorConciliacion(selMes.value);
+  };
+
+  // Cargar el borrador del mes seleccionado al abrir el formulario.
+  cargarBorradorConciliacion(selMes.value);
 }
 
 function calcularCierre() {
@@ -3706,6 +3828,9 @@ async function guardarCierre() {
 
     // Actualizar la fecha de último cierre en Config
     await actualizarCelda('Config!B2', fechaCierre);
+
+    // Marcar el borrador de este mes como conciliado (Pieza 1)
+    await limpiarBorradorConciliacion(mes);
 
     await cargarDatos();
     await recalcularSaldos(true);
