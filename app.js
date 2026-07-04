@@ -3562,6 +3562,39 @@ async function limpiarBorradorConciliacion(periodo) {
   }
 }
 
+// ── MOTOR ÚNICO DE CONCILIACIÓN (Pieza 3) ─────────────────────────────
+// Núcleo compartido por el cierre de mes y (próximamente) la conciliación
+// de mitad de mes, para no duplicar la lógica.
+
+// Concilia un producto: compara el saldo real digitado contra el calculado.
+// Devuelve el detalle con la diferencia, manejando el signo de la deuda.
+// Reusa esProductoDeuda (ya definida arriba): en deuda el saldo vive en
+// negativo y se digita en positivo.
+function conciliarSaldo(prod, valorDigitado) {
+  const esDeuda = esProductoDeuda(prod.id);
+  const saldoReal = esDeuda ? -Math.abs(valorDigitado) : valorDigitado;
+  const saldoCalculado = prod.saldoActual;
+  const diferencia = saldoReal - saldoCalculado;
+  return { id: prod.id, nombre: prod.nombre, esDeuda, saldoReal, saldoCalculado, diferencia };
+}
+
+// Escribe la transacción de ajuste de una diferencia de conciliación.
+// diferencia > 0 → Ingreso (Otros ingresos); diferencia < 0 → Egreso (Ajuste de conciliación).
+async function escribirAjusteConciliacion(item, fechaTx, etiqueta) {
+  const esIngreso = item.diferencia > 0;
+  const subAjuste = esIngreso ? 'Otros ingresos' : 'Ajuste de conciliación';
+  const gAjuste = estado.grupos.find(x => x.subgrupo === subAjuste);
+  await escribirFila('Transacciones', [
+    'TX' + Date.now() + Math.floor(Math.random() * 100),
+    fechaTx,
+    esIngreso ? 'Ingreso' : 'Egreso',
+    esIngreso ? 'Ingresos' : 'Otros egresos',
+    subAjuste,
+    item.id, '', Math.abs(item.diferencia),
+    etiqueta, 'Cierre', 'TRUE', '', gAjuste ? gAjuste.idSubgrupo : ''
+  ]);
+}
+
 function inicializarCierre() {
   // Poblar selector de mes
   const sel = document.getElementById('cierre-mes');
@@ -3714,54 +3747,51 @@ function calcularCierre() {
     html += `<div>📈 <strong>${prod.nombre}</strong>: saldo ${fmt(saldoFinal)} · entradas ${fmt(entradas)} · salidas ${fmt(salidas)} → rendimiento: <span class="${clsRend}">${fmt(rendimiento)}</span></div>`;
   });
 
-  // Cuentas de ahorro: conciliación (saldo calculado vs real)
+  // Cuentas de ahorro: conciliación (saldo calculado vs real) — motor único (Pieza 3)
   document.querySelectorAll('#cierre-cuentas .cierre-linea').forEach(linea => {
     const id = linea.dataset.id;
     const inp = linea.querySelector('.cierre-input-cuenta');
-    const saldoReal = parseFloat(inp.value);
-    if (isNaN(saldoReal)) return; // si no ingresó saldo real, no la concilia
+    const valor = parseFloat(inp.value);
+    if (isNaN(valor)) return; // si no ingresó saldo real, no la concilia
     const prod = estado.productos.find(p => p.id === id);
-    const saldoCalculado = prod.saldoActual;
-    const diferencia = saldoReal - saldoCalculado;
+    const c = conciliarSaldo(prod, valor);
 
     actualizaciones.push({
       id, nombre: prod.nombre, tipo: 'cuenta',
-      saldoFinal: saldoReal, saldoCalculado, diferencia
+      saldoFinal: c.saldoReal, saldoCalculado: c.saldoCalculado, diferencia: c.diferencia
     });
 
-    if (Math.abs(diferencia) < 1) {
-      html += `<div>🏦 <strong>${prod.nombre}</strong>: ${fmt(saldoReal)} — <span class="rend-positivo">cuadra ✓</span></div>`;
+    if (Math.abs(c.diferencia) < 1) {
+      html += `<div>🏦 <strong>${prod.nombre}</strong>: ${fmt(c.saldoReal)} — <span class="rend-positivo">cuadra ✓</span></div>`;
     } else {
-      const signo = diferencia > 0 ? '+' : '';
-      html += `<div>🏦 <strong>${prod.nombre}</strong>: real ${fmt(saldoReal)} vs app ${fmt(saldoCalculado)} → <span class="rend-negativo">diferencia ${signo}${fmt(diferencia)}</span></div>`;
+      const signo = c.diferencia > 0 ? '+' : '';
+      html += `<div>🏦 <strong>${prod.nombre}</strong>: real ${fmt(c.saldoReal)} vs app ${fmt(c.saldoCalculado)} → <span class="rend-negativo">diferencia ${signo}${fmt(c.diferencia)}</span></div>`;
     }
   });
 
-  // Tarjetas de crédito: conciliación (la deuda se guarda en negativo) — Pieza 2
+  // Tarjetas de crédito: conciliación — motor único (Pieza 3)
   document.querySelectorAll('#cierre-tarjetas .cierre-linea').forEach(linea => {
     const id = linea.dataset.id;
     const inp = linea.querySelector('input');
-    const saldoRealAbs = parseFloat(inp.value);
-    if (isNaN(saldoRealAbs)) return; // si no ingresó saldo, no la concilia
+    const valor = parseFloat(inp.value);
+    if (isNaN(valor)) return; // si no ingresó saldo, no la concilia
     const prod = estado.productos.find(p => p.id === id);
-    const saldoReal = -Math.abs(saldoRealAbs); // la deuda vive en negativo
-    const saldoCalculado = prod.saldoActual;
-    const diferencia = saldoReal - saldoCalculado;
+    const c = conciliarSaldo(prod, valor);
 
     // Se marca como 'cuenta' para reusar el mismo motor de ajuste/congelado.
     actualizaciones.push({
       id, nombre: prod.nombre, tipo: 'cuenta',
-      saldoFinal: saldoReal, saldoCalculado, diferencia
+      saldoFinal: c.saldoReal, saldoCalculado: c.saldoCalculado, diferencia: c.diferencia
     });
 
-    if (Math.abs(diferencia) < 1) {
-      html += `<div>💳 <strong>${prod.nombre}</strong>: debes ${fmt(saldoRealAbs)} — <span class="rend-positivo">cuadra ✓</span></div>`;
+    if (Math.abs(c.diferencia) < 1) {
+      html += `<div>💳 <strong>${prod.nombre}</strong>: debes ${fmt(Math.abs(c.saldoReal))} — <span class="rend-positivo">cuadra ✓</span></div>`;
     } else {
-      const signo = diferencia > 0 ? '+' : '';
-      const pista = diferencia < 0
+      const signo = c.diferencia > 0 ? '+' : '';
+      const pista = c.diferencia < 0
         ? ' — falta registrar un consumo'
         : ' — falta registrar un pago o hay un consumo de más';
-      html += `<div>💳 <strong>${prod.nombre}</strong>: real ${fmt(Math.abs(saldoReal))} vs app ${fmt(Math.abs(saldoCalculado))} → <span class="rend-negativo">diferencia ${signo}${fmt(diferencia)}</span>${pista}</div>`;
+      html += `<div>💳 <strong>${prod.nombre}</strong>: real ${fmt(Math.abs(c.saldoReal))} vs app ${fmt(Math.abs(c.saldoCalculado))} → <span class="rend-negativo">diferencia ${signo}${fmt(c.diferencia)}</span>${pista}</div>`;
     }
   });
 
@@ -3843,20 +3873,9 @@ async function guardarCierre() {
         ]);
       }
 
-      // Para cuenta con diferencia en modo "ajuste": registrar transacción de ajuste
+      // Para cuenta con diferencia en modo "ajuste": registrar el ajuste (motor único, Pieza 3)
       if (a.tipo === 'cuenta' && Math.abs(a.diferencia) >= 1 && modoDif === 'ajuste') {
-        const esIngreso = a.diferencia > 0;
-        const subAjuste = esIngreso ? 'Otros ingresos' : 'Ajuste de conciliación';
-        const gAjuste = estado.grupos.find(x => x.subgrupo === subAjuste);
-        await escribirFila('Transacciones', [
-          'TX' + Date.now() + Math.floor(Math.random()*100),
-          fechaCierre,
-          esIngreso ? 'Ingreso' : 'Egreso',
-          esIngreso ? 'Ingresos' : 'Otros egresos',
-          subAjuste,
-          a.id, '', Math.abs(a.diferencia),
-          `Ajuste conciliación cierre ${mes}`, 'Cierre', 'TRUE', '', gAjuste ? gAjuste.idSubgrupo : ''
-        ]);
+        await escribirAjusteConciliacion(a, fechaCierre, `Ajuste conciliación cierre ${mes}`);
       }
     }
 
