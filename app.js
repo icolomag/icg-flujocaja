@@ -1787,6 +1787,7 @@ function cambiarVista(vista) {
   if (vista === 'presupuesto') inicializarPresupuesto();
   if (vista === 'nomina') inicializarNomina();
   if (vista === 'cierre') inicializarCierre();
+  if (vista === 'conciliacion') inicializarConciliacion();
   if (vista === 'notas') inicializarNotas();
   if (vista === 'extracto') inicializarExtracto();
   if (vista === 'ppto-vista') inicializarPptoVista();
@@ -3580,7 +3581,7 @@ function conciliarSaldo(prod, valorDigitado) {
 
 // Escribe la transacción de ajuste de una diferencia de conciliación.
 // diferencia > 0 → Ingreso (Otros ingresos); diferencia < 0 → Egreso (Ajuste de conciliación).
-async function escribirAjusteConciliacion(item, fechaTx, etiqueta) {
+async function escribirAjusteConciliacion(item, fechaTx, etiqueta, fuente = 'Cierre') {
   const esIngreso = item.diferencia > 0;
   const subAjuste = esIngreso ? 'Otros ingresos' : 'Ajuste de conciliación';
   const gAjuste = estado.grupos.find(x => x.subgrupo === subAjuste);
@@ -3591,7 +3592,7 @@ async function escribirAjusteConciliacion(item, fechaTx, etiqueta) {
     esIngreso ? 'Ingresos' : 'Otros egresos',
     subAjuste,
     item.id, '', Math.abs(item.diferencia),
-    etiqueta, 'Cierre', 'TRUE', '', gAjuste ? gAjuste.idSubgrupo : ''
+    etiqueta, fuente, 'TRUE', '', gAjuste ? gAjuste.idSubgrupo : ''
   ]);
 }
 
@@ -3924,6 +3925,129 @@ function resetCierre() {
   document.getElementById('btn-cierre-guardar').classList.add('oculto');
   document.getElementById('btn-cierre-cancelar').classList.add('oculto');
   document.querySelectorAll('#vista-cierre input').forEach(i => i.value = '');
+}
+
+// ── CONCILIACIÓN DE MITAD DE MES (Pieza 4) ────────────────────────────
+// Herramienta suelta para cuadrar cuentas y tarjetas contra el extracto en
+// cualquier momento, sin cerrar el mes. Usa el mismo motor (conciliarSaldo /
+// escribirAjusteConciliacion). NO congela Saldo_Cierre ni avanza la fecha.
+let concilResultado = null;
+
+function inicializarConciliacion() {
+  const cuentas = estado.productos.filter(p =>
+    p.tipo === 'Cuenta Ahorros' && p.estado === 'Activa'
+  );
+  document.getElementById('concil-cuentas').innerHTML = cuentas.map(p => `
+    <div class="cierre-linea" data-id="${p.id}">
+      <span class="cierre-nombre">${p.nombre}</span>
+      <span class="cierre-saldo-actual">App: ${fmt(p.saldoActual)}</span>
+      <input type="number" class="cierre-input-cuenta" placeholder="Saldo real del banco" />
+    </div>
+  `).join('');
+
+  const tarjetas = estado.productos.filter(p =>
+    p.tipo === 'Tarjeta Crédito' && p.estado === 'Activa'
+  );
+  document.getElementById('concil-tarjetas').innerHTML = tarjetas.map(p => `
+    <div class="cierre-linea" data-id="${p.id}">
+      <span class="cierre-nombre">${p.nombre}</span>
+      <span class="cierre-saldo-actual">App: debes ${fmt(Math.abs(p.saldoActual))}</span>
+      <input type="number" class="cierre-input-cuenta" placeholder="Saldo real del extracto (lo que debes)" />
+    </div>
+  `).join('');
+
+  const b = document.getElementById('btn-concil-calcular');
+  b.replaceWith(b.cloneNode(true));
+  document.getElementById('btn-concil-calcular').addEventListener('click', calcularConciliacion);
+
+  document.getElementById('concil-resultado').innerHTML = '';
+  concilResultado = null;
+}
+
+function calcularConciliacion() {
+  const items = [];
+  let html = '';
+
+  document.querySelectorAll('#vista-conciliacion .cierre-linea').forEach(linea => {
+    const id = linea.dataset.id;
+    const inp = linea.querySelector('input');
+    const valor = parseFloat(inp.value);
+    if (isNaN(valor)) return;
+    const prod = estado.productos.find(p => p.id === id);
+    const c = conciliarSaldo(prod, valor);
+    items.push(c);
+
+    const icono = c.esDeuda ? '💳' : '🏦';
+    if (Math.abs(c.diferencia) < 1) {
+      html += `<div style="margin:6px 0">${icono} <strong>${c.nombre}</strong>: <span class="rend-positivo">cuadra ✓</span></div>`;
+    } else {
+      const signo = c.diferencia > 0 ? '+' : '';
+      html += `<div style="margin:6px 0;padding:8px;background:var(--bg3);border-radius:8px">
+        ${icono} <strong>${c.nombre}</strong>: real ${fmt(Math.abs(c.saldoReal))} vs app ${fmt(Math.abs(c.saldoCalculado))} &rarr;
+        <span class="rend-negativo">diferencia ${signo}${fmt(c.diferencia)}</span>
+        <label style="display:block;margin-top:6px;font-size:13px">
+          <input type="checkbox" class="concil-check" data-id="${c.id}" />
+          Llevar esta diferencia a un ajuste (si no, la reviso yo)
+        </label>
+      </div>`;
+    }
+  });
+
+  if (!items.length) {
+    mostrarToast('Digita al menos un saldo');
+    return;
+  }
+
+  concilResultado = { items };
+  const conDif = items.filter(i => Math.abs(i.diferencia) >= 1);
+
+  if (conDif.length) {
+    html += `<div style="margin-top:14px">
+      <button id="btn-concil-ajustar" class="btn-confirmar" onclick="registrarAjustesConciliacion()">✓ Registrar ajustes marcados</button>
+    </div>
+    <p style="color:var(--texto2);font-size:12px;margin-top:8px">
+      El ajuste se registra con fecha de hoy. Si la diferencia es un consumo o movimiento que faltó, lo sano es registrarlo en su rubro y no marcarlo como ajuste.
+    </p>`;
+  } else {
+    html += `<div style="margin-top:10px" class="rend-positivo"><strong>Todo cuadra &#10003;</strong></div>`;
+  }
+
+  document.getElementById('concil-resultado').innerHTML =
+    `<div class="cierre-rendimiento"><strong>Resultado de la conciliación:</strong>${html}</div>`;
+}
+
+async function registrarAjustesConciliacion() {
+  if (!concilResultado) return;
+  const marcados = Array.from(document.querySelectorAll('.concil-check:checked')).map(ch => ch.dataset.id);
+  if (!marcados.length) { mostrarToast('No marcaste ninguna diferencia para ajuste'); return; }
+
+  const aAjustar = concilResultado.items.filter(i => marcados.includes(i.id) && Math.abs(i.diferencia) >= 1);
+  if (!aAjustar.length) { mostrarToast('Nada para ajustar'); return; }
+
+  const btn = document.getElementById('btn-concil-ajustar');
+  const textoOrig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+
+  const h = new Date();
+  const fechaHoy = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-${String(h.getDate()).padStart(2, '0')}`;
+
+  mostrarSpinner(true);
+  try {
+    for (const item of aAjustar) {
+      await escribirAjusteConciliacion(item, fechaHoy, `Ajuste conciliación ${fechaHoy}`, 'Conciliación');
+    }
+    await cargarDatos();
+    await recalcularSaldos(true);
+    mostrarSpinner(false);
+    if (btn) { btn.disabled = false; btn.textContent = textoOrig; }
+    mostrarToast(`✓ ${aAjustar.length} ajuste(s) registrado(s)`);
+    inicializarConciliacion();
+  } catch (e) {
+    mostrarSpinner(false);
+    if (btn) { btn.disabled = false; btn.textContent = textoOrig; }
+    mostrarToast('Error al registrar ajustes: ' + e.message);
+    console.error(e);
+  }
 }
 
 // ── NOTAS / CONTEXTO ──────────────────────────────────────────────────
