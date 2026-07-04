@@ -71,6 +71,7 @@
         <button class="nav-grupo-btn">🔄 Cerrar/Configurar <span class="nav-flecha">▾</span></button>
         <div class="nav-menu">
           <button class="nav-btn" data-vista="cierre">🔄 Cierre mes</button>
+          <button class="nav-btn" data-vista="conciliacion">🔍 Conciliar (mitad de mes)</button>
           <button class="nav-btn" data-vista="ppto-vista">📅 Presupuesto 12M</button>
           <button class="nav-btn" data-vista="notas">📝 Notas</button>
         </div>
@@ -538,6 +539,29 @@
           <button id="btn-cierre-cancelar" class="btn-secundario oculto">Cancelar</button>
         </div>
         <div id="cierre-resultado"></div>
+      </div>
+
+      <!-- VISTA: CONCILIACIÓN (mitad de mes) -->
+      <div id="vista-conciliacion" class="vista oculto">
+        <h2>Conciliar durante el mes</h2>
+        <p style="color:var(--texto2);font-size:13px;margin-bottom:20px">
+          Cuadra cualquier cuenta o tarjeta contra su extracto cuando quieras, sin cerrar el mes. No congela saldos ni cambia la fecha de cierre; solo te muestra las diferencias y, si lo eliges, registra un ajuste con fecha de hoy.
+        </p>
+
+        <div class="cierre-seccion">
+          <h3>🏦 Cuentas de ahorro</h3>
+          <div id="concil-cuentas"></div>
+        </div>
+
+        <div class="cierre-seccion">
+          <h3>💳 Tarjetas de crédito</h3>
+          <div id="concil-tarjetas"></div>
+        </div>
+
+        <div class="campo-accion">
+          <button id="btn-concil-calcular" class="btn-primario">Revisar diferencias</button>
+        </div>
+        <div id="concil-resultado"></div>
       </div>
 
       <!-- VISTA: NOTAS / CONTEXTO -->
