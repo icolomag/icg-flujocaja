@@ -3729,15 +3729,24 @@ function calcularCierre() {
     const saldoFinal = parseFloat(inp.value);
     if (isNaN(saldoFinal)) return;
     const prod = estado.productos.find(p => p.id === id);
-    const saldoInicial = prod.saldoActual;
+    // Saldo al INICIO del mes = saldo de cierre anterior (NO el saldo de hoy,
+    // que ya trae descontados los movimientos del mes → doble conteo).
+    const saldoInicial = prod.saldoCierre;
 
-    // Sumar traslados del mes hacia/desde este producto
+    // Aportes/retiros del mes hacia/desde este producto. Cuentan traslados Y
+    // también ingresos/egresos registrados directo sobre el producto (p.ej. el
+    // aporte que la empresa hace a FondoSura como Ingreso): son aporte/retiro,
+    // no rendimiento.
     let entradas = 0, salidas = 0;
     estado.transacciones.forEach(t => {
       if (!t.fecha || !t.fecha.startsWith(mes)) return;
       if (t.tipo === 'Traslado') {
         if (t.destino === id) entradas += t.monto;
         if (t.origen === id) salidas += t.monto;
+      } else if (t.tipo === 'Ingreso' && t.origen === id) {
+        entradas += t.monto;
+      } else if (t.tipo === 'Egreso' && t.origen === id) {
+        salidas += t.monto;
       }
     });
 
