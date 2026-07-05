@@ -3708,10 +3708,15 @@ async function limpiarBorradorConciliacion(periodo) {
 // Devuelve el detalle con la diferencia, manejando el signo de la deuda.
 // Reusa esProductoDeuda (ya definida arriba): en deuda el saldo vive en
 // negativo y se digita en positivo.
-function conciliarSaldo(prod, valorDigitado) {
+function conciliarSaldo(prod, valorDigitado, saldoCalculadoOverride) {
   const esDeuda = esProductoDeuda(prod.id);
   const saldoReal = esDeuda ? -Math.abs(valorDigitado) : valorDigitado;
-  const saldoCalculado = prod.saldoActual;
+  // Por defecto usa el saldo vivo (saldoActual), como la conciliacion de mitad
+  // de mes. El cierre le pasa un saldo acotado al mes que se cierra para no
+  // mezclar movimientos de meses posteriores ya cargados.
+  const saldoCalculado = (saldoCalculadoOverride !== undefined && saldoCalculadoOverride !== null)
+    ? saldoCalculadoOverride
+    : prod.saldoActual;
   const diferencia = saldoReal - saldoCalculado;
   return { id: prod.id, nombre: prod.nombre, esDeuda, saldoReal, saldoCalculado, diferencia };
 }
@@ -3845,6 +3850,12 @@ function calcularCierre() {
   const actualizaciones = [];
   let html = '';
 
+  // Ultimo dia del mes que se esta cerrando (YYYY-MM-DD). Sirve para acotar la
+  // conciliacion a ese mes y no mezclar movimientos del mes siguiente ya cargados.
+  const [__anioCierre, __mesCierre] = mes.split('-').map(Number);
+  const __ultDiaCierre = new Date(__anioCierre, __mesCierre, 0).getDate();
+  const finMesCierre = `${mes}-${String(__ultDiaCierre).padStart(2, '0')}`;
+
   // Deuda: actualización directa de saldo
   document.querySelectorAll('#cierre-deuda .cierre-linea').forEach(linea => {
     const id = linea.dataset.id;
@@ -3901,7 +3912,8 @@ function calcularCierre() {
     const valor = parseFloat(inp.value);
     if (isNaN(valor)) return; // si no ingresó saldo real, no la concilia
     const prod = estado.productos.find(p => p.id === id);
-    const c = conciliarSaldo(prod, valor);
+    const saldoMes = calcularSaldoProductoHasta(id, finMesCierre);
+    const c = conciliarSaldo(prod, valor, saldoMes);
 
     actualizaciones.push({
       id, nombre: prod.nombre, tipo: 'cuenta',
@@ -3923,7 +3935,8 @@ function calcularCierre() {
     const valor = parseFloat(inp.value);
     if (isNaN(valor)) return; // si no ingresó saldo, no la concilia
     const prod = estado.productos.find(p => p.id === id);
-    const c = conciliarSaldo(prod, valor);
+    const saldoMes = calcularSaldoProductoHasta(id, finMesCierre);
+    const c = conciliarSaldo(prod, valor, saldoMes);
 
     // Se marca como 'cuenta' para reusar el mismo motor de ajuste/congelado.
     actualizaciones.push({
@@ -4039,7 +4052,9 @@ async function guardarCierre() {
       if (act && (act.tipo === 'deuda' || act.tipo === 'inversion')) {
         saldoCongelar = act.saldoFinal;
       } else {
-        saldoCongelar = prod.saldoActual; // cuentas de ahorro y demás: saldo ya calculado/conciliado
+        // Acotado al mes que se cierra: excluye movimientos de meses posteriores
+        // (p.ej. registros del mes siguiente ya cargados) para no ensuciar el cierre.
+        saldoCongelar = calcularSaldoProductoHasta(prod.id, fechaCierre);
       }
       await actualizarCelda(`Productos!O${i + 2}`, saldoCongelar);
       await actualizarCelda(`Productos!G${i + 2}`, saldoCongelar);
@@ -4941,6 +4956,34 @@ function calcularSaldoProducto(productoId) {
 
   estado.transacciones.forEach(t => {
     if (!t.fecha || t.fecha <= corte) return; // solo movimientos posteriores al cierre
+
+    const monto = t.monto || 0;
+    if (t.tipo === 'Ingreso' && t.origen === productoId) saldo += monto;
+    else if (t.tipo === 'Egreso' && t.origen === productoId) saldo -= monto;
+    else if (t.tipo === 'Traslado') {
+      if (t.origen === productoId) saldo -= monto;
+      if (t.destino === productoId) saldo += monto;
+    }
+  });
+
+  return saldo;
+}
+
+// Igual que calcularSaldoProducto, pero acota los movimientos al mes que se
+// esta cerrando: solo cuenta los que caen entre el ultimo cierre y el ultimo
+// dia del mes indicado (fechaFinMes = 'YYYY-MM-DD'). Ignora lo posterior. Se usa
+// en el cierre para que registrar el mes siguiente NO ensucie la conciliacion
+// ni el Saldo_Cierre del mes que se cierra.
+function calcularSaldoProductoHasta(productoId, fechaFinMes) {
+  const prod = estado.productos.find(p => p.id === productoId);
+  if (!prod) return 0;
+
+  let saldo = prod.saldoCierre;
+  const corte = estado.ultimoCierre; // fecha del ultimo cierre (YYYY-MM-DD)
+
+  estado.transacciones.forEach(t => {
+    if (!t.fecha || t.fecha <= corte) return;   // anteriores o iguales al ultimo cierre
+    if (t.fecha > fechaFinMes) return;          // posteriores al mes que se cierra
 
     const monto = t.monto || 0;
     if (t.tipo === 'Ingreso' && t.origen === productoId) saldo += monto;
