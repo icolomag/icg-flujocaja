@@ -3110,7 +3110,7 @@ function renderFlujos(flujos) {
   // ── BLOQUE OPERATIVO ──
   html += `<div class="flujo-bloque-header operativo">
     <div>Flujo operativo</div>
-    <div class="num bloque-doble"><span class="proy">${fmt(op.neto)}</span><span class="real">${fmt(op.netoReal)}</span></div>
+    <div class="num bloque-doble"><span class="proy">${fmt(op.neto)}</span><span class="real" style="margin-left:16px">${fmt(op.netoReal)}</span></div>
   </div>`;
 
   if (nivelPpto !== 'resumen') {
@@ -3142,7 +3142,7 @@ function renderFlujos(flujos) {
   // ── BLOQUE FINANCIERO ── (informativo: Proyectado vs Real)
   html += `<div class="flujo-bloque-header financiero">
     <div>Flujo financiero</div>
-    <div class="num bloque-doble"><span class="proy">${fmt(fin.neto)}</span><span class="real">${fmt(fin.netoReal)}</span></div>
+    <div class="num bloque-doble"><span class="proy">${fmt(fin.neto)}</span><span class="real" style="margin-left:16px">${fmt(fin.netoReal)}</span></div>
   </div>`;
 
   if (nivelPpto !== 'resumen') {
@@ -3169,7 +3169,7 @@ function renderFlujos(flujos) {
   const clsNetoProy = netoProyectado >= 0 ? 'verde' : 'rojo';
   html += `<div class="flujo-bloque-header neto">
     <div>Flujo neto del mes</div>
-    <div class="num bloque-doble"><span class="proy ${clsNetoProy}">${fmt(netoProyectado)}</span><span class="real ${clsNeto}">${fmt(netoCombinado)}</span></div>
+    <div class="num bloque-doble"><span class="proy ${clsNetoProy}">${fmt(netoProyectado)}</span><span class="real ${clsNeto}" style="margin-left:16px">${fmt(netoCombinado)}</span></div>
   </div>`;
 
   html += `</div>
@@ -4525,6 +4525,9 @@ function calcularFlujoOperativo(mesYYYYMM) {
     estado.transacciones.forEach(t => {
       if (!t.fecha || t.fecha.substring(0, 7) !== mesYYYYMM) return;
       if (t.tipo !== 'Ingreso' && t.tipo !== 'Egreso') return;
+      // El rendimiento LP no toca caja: vive SOLO en el flujo financiero, no en el operativo.
+      const gRLP = estado.grupos.find(x => x.grupo === t.grupo && x.subgrupo === t.subgrupo);
+      if (gRLP && gRLP.esRendimientoLP) return;
       const esIngreso = t.tipo === 'Ingreso';
 
       const grupo = t.grupo || 'Sin grupo';
@@ -4654,7 +4657,12 @@ function calcularFlujoFinanciero(mesYYYYMM) {
       if (t.tipo === 'Traslado' && destinoEsLP && !origenEsLP) {
         res.aportesLPReal += t.monto;
       } else if (t.tipo === 'Ingreso' && origenEsLP) {
-        res.aportesLPReal += t.monto;
+        // El rendimiento LP reinvertido NO es un aporte de caja: se muestra aparte
+        // (informativo). Solo cuentan como aporte los ingresos que no son rendimiento LP.
+        const gAp = estado.grupos.find(x => x.grupo === t.grupo && x.subgrupo === t.subgrupo);
+        if (!(gAp && gAp.esRendimientoLP)) {
+          res.aportesLPReal += t.monto;
+        }
       }
 
       // Retiro LP: traslado con ORIGEN un fondo LP (destino no LP),
