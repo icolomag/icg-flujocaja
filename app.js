@@ -443,8 +443,10 @@ async function confirmarCorreo(gmailId) {
       if (!r.esTraslado && prodSel && prodSel.tipo === 'Tarjeta Crédito') {
         await generarCuotasTC(r.idTx, datosTx);
       }
-      // GMF si la salida es desde cuenta de ahorros no exenta
-      gmfGmail = await generarGMF(producto, c.monto, c.fecha, descripcion, 'Gmail');
+      // GMF solo sobre SALIDAS (nunca sobre un Ingreso)
+      gmfGmail = c.tipo !== 'Ingreso'
+        ? await generarGMF(producto, c.monto, c.fecha, descripcion, 'Gmail')
+        : 0;
     }
     await cargarDatos();
     mostrarSpinner(false);
@@ -652,7 +654,9 @@ function productoGeneraGMF(idProducto) {
   const tipo = (p.tipo || '').toLowerCase();
   // Solo cuentas de ahorro / inversión líquida (de donde sale caja real)
   const esCuentaCaja = tipo.includes('ahorro') || tipo.includes('inversión') || tipo.includes('inversion');
-  return esCuentaCaja && !p.exentoGMF;
+  // Solo cuentas de las que sale caja real: deben ser DISPONIBLE (líquidas).
+  // Los fondos de inversión LP (FondoSura, Cesantías, XTB) NO son disponible → nunca GMF.
+  return esCuentaCaja && p.disponible && !p.exentoGMF;
 }
 
 // Calcula el valor del GMF de una salida. Devuelve 0 si la cuenta es exenta
@@ -1277,9 +1281,11 @@ function configurarFormularios() {
         await marcarCuotasPagoExtracto(r.destino, r.idTx, datos.fecha);
       }
     }
-    // GMF si la salida es desde una cuenta de ahorros no exenta
-    // (calcularGMF devuelve 0 si el origen es una TC o cuenta exenta)
-    const gmfTx = await generarGMF(datos.producto, datos.monto, datos.fecha, datos.descripcion, 'Manual');
+    // GMF solo sobre SALIDAS de caja (nunca sobre un Ingreso).
+    // calcularGMF además devuelve 0 si el producto no es una cuenta disponible no exenta.
+    const gmfTx = datos.tipo !== 'Ingreso'
+      ? await generarGMF(datos.producto, datos.monto, datos.fecha, datos.descripcion, 'Manual')
+      : 0;
     await cargarDatos();
     mostrarSpinner(false);
     let msgTx = r.esTraslado ? '✓ Pago de TC registrado' : '✓ Transacción registrada';
@@ -2260,8 +2266,10 @@ async function registrarMovimientoImagen(i) {
       if (!r.esTraslado && prodSel && prodSel.tipo === 'Tarjeta Crédito') {
         await generarCuotasTC(r.idTx, datosTx);
       }
-      // GMF si la salida es desde cuenta de ahorros no exenta
-      gmfImg = await generarGMF(producto, m.monto, m.fecha, descripcion, 'Imagen');
+      // GMF solo sobre SALIDAS (nunca sobre un Ingreso)
+      gmfImg = m.tipo !== 'Ingreso'
+        ? await generarGMF(producto, m.monto, m.fecha, descripcion, 'Imagen')
+        : 0;
     }
     await cargarDatos();
     mostrarSpinner(false);
