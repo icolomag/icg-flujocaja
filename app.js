@@ -3839,10 +3839,37 @@ function inicializarCierre() {
   selMes.onchange = () => {
     document.querySelectorAll('#vista-cierre input').forEach(i => i.value = '');
     cargarBorradorConciliacion(selMes.value);
+    actualizarEncabezadosCierre(selMes.value);
   };
 
   // Cargar el borrador del mes seleccionado al abrir el formulario.
   cargarBorradorConciliacion(selMes.value);
+
+  // Mostrar el saldo "App:" acotado al mes seleccionado (no el saldo vivo).
+  actualizarEncabezadosCierre(selMes.value);
+}
+
+// Actualiza el rotulo "App:" de cuentas y tarjetas en el formulario de cierre
+// para que muestre el saldo ACOTADO al mes seleccionado (no el saldo vivo con
+// meses posteriores). Se llama al abrir el cierre y al cambiar de mes, asi el
+// encabezado coincide siempre con lo que luego calcula la conciliacion.
+function actualizarEncabezadosCierre(mes) {
+  if (!mes) return;
+  const [a, m] = mes.split('-').map(Number);
+  const ultDia = new Date(a, m, 0).getDate();
+  const finMes = `${mes}-${String(ultDia).padStart(2, '0')}`;
+
+  document.querySelectorAll('#cierre-cuentas .cierre-linea').forEach(linea => {
+    const saldo = calcularSaldoProductoHasta(linea.dataset.id, finMes);
+    const span = linea.querySelector('.cierre-saldo-actual');
+    if (span) span.textContent = `App: ${fmt(saldo)}`;
+  });
+
+  document.querySelectorAll('#cierre-tarjetas .cierre-linea').forEach(linea => {
+    const saldo = calcularSaldoProductoHasta(linea.dataset.id, finMes);
+    const span = linea.querySelector('.cierre-saldo-actual');
+    if (span) span.textContent = `App: debes ${fmt(Math.abs(saldo))}`;
+  });
 }
 
 function calcularCierre() {
