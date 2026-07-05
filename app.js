@@ -2812,21 +2812,62 @@ function renderPanelTrasladoProvisiones() {
   const wrap = document.createElement('div');
   wrap.className = 'chat-msg asistente';
   wrap.style.background = 'transparent';
-  wrap.innerHTML = `<div style="border:1px solid var(--borde,#ccc);border-radius:10px;padding:14px">
+  wrap.innerHTML = `<div class="tp-panel" style="border:1px solid var(--borde,#ccc);border-radius:10px;padding:14px">
     <div style="font-weight:700;margin-bottom:4px">🔁 Traslado de provisiones ${mes} → ${mesSig}</div>
     <div style="font-size:13px;color:var(--texto2);margin-bottom:8px">Marca los rubros que quieras trasladar; la app ya calculó el monto (sobrante, topado). Total propuesto: <strong>${fmt(totalTrasl)}</strong>.</div>
     ${filas}
-    <button class="btn-descargar-cierre" onclick="aplicarTrasladoProvisiones()" style="margin-top:12px">✓ Aplicar traslados aprobados</button>
+    <button class="btn-descargar-cierre" onclick="aplicarTrasladoProvisiones(this)" style="margin-top:12px">✓ Aplicar traslados aprobados</button>
     <div style="font-size:12px;color:var(--texto2);margin-top:8px">Al aplicar, se agrega una fila "Traslado provisión" en el presupuesto de ${mesSig} de cada rubro aprobado. <em>(La escritura se habilita en la Pieza B2.)</em></div>
   </div>`;
   cont.appendChild(wrap);
   cont.scrollTop = cont.scrollHeight;
 }
 
-function aplicarTrasladoProvisiones() {
-  // Pieza B2: aquí irá la escritura de las filas de traslado en la hoja Presupuesto.
-  const marcados = Array.from(document.querySelectorAll('.tp-check:checked')).length;
-  mostrarToast(`(B1) ${marcados} traslado(s) marcado(s). La escritura se habilita en la Pieza B2.`);
+async function aplicarTrasladoProvisiones(btn) {
+  if (!traslProvDatos) return;
+  const { mes, mesSig, items } = traslProvDatos;
+  const panel = (btn && btn.closest('.tp-panel')) || document;
+  const marcadosIdx = Array.from(panel.querySelectorAll('.tp-check:checked')).map(ch => parseInt(ch.dataset.idx, 10));
+  const aAplicar = marcadosIdx.map(idx => items[idx]).filter(i => i && i.trasladable > 0);
+  if (!aAplicar.length) { mostrarToast('No marcaste ningún traslado con monto'); return; }
+
+  if (!confirm(`Vas a agregar ${aAplicar.length} traslado(s) de provisión al presupuesto de ${mesSig}. ¿Continuar?`)) return;
+
+  const textoOrig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+  mostrarSpinner(true);
+  try {
+    // Candado anti-doble-aplicación: no duplicar un traslado ya escrito para el mismo
+    // rubro y mes (identificado por el comentario "Traslado provisión ...").
+    const filas = await leerHoja('Presupuesto!A2:F');
+    const yaTrasladado = (grupo, sub) => filas.some(fr =>
+      (fr[0] || '').substring(0, 7) === mesSig &&
+      (fr[2] || '') === grupo && (fr[3] || '') === sub &&
+      (fr[5] || '').toLowerCase().includes('traslado provisión')
+    );
+
+    const fechaSig = `${mesSig}-01`;
+    let aplicados = 0, saltados = 0;
+    for (const i of aAplicar) {
+      if (yaTrasladado(i.grupo, i.subgrupo)) { saltados++; continue; }
+      await escribirFila('Presupuesto', [
+        fechaSig, 'Egreso', i.grupo, i.subgrupo, i.trasladable,
+        `Traslado provisión ${mes}→${mesSig}`
+      ]);
+      aplicados++;
+    }
+    await cargarDatos();
+    mostrarSpinner(false);
+    if (btn) { btn.disabled = true; btn.textContent = '✓ Aplicado'; }
+    let msg = `✓ ${aplicados} traslado(s) aplicado(s) al presupuesto de ${mesSig}`;
+    if (saltados) msg += ` · ${saltados} ya estaba(n), no se duplicaron`;
+    mostrarToast(msg);
+  } catch (e) {
+    mostrarSpinner(false);
+    if (btn) { btn.disabled = false; btn.textContent = textoOrig || '✓ Aplicar traslados aprobados'; }
+    mostrarToast('Error al aplicar traslados: ' + e.message);
+    console.error(e);
+  }
 }
 
 // Toma el último mensaje del asistente del chat (el análisis recién generado).
