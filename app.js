@@ -2615,16 +2615,41 @@ function mesSiguiente(mesYYYYMM) {
 // Construye el texto del paquete de cierre que ve la IA.
 // Calcula los datos del cierre de un mes en forma de OBJETO estructurado.
 // Lo usan tanto el texto que ve la IA como el HTML de descarga (misma fuente).
+// Movimiento REAL de caja disponible en un mes: todo lo que entró/salió de las
+// cuentas disponibles (ingresos, egresos y traslados). Es el cambio de caja
+// efectivo del mes — distinto del neto operativo, que es devengado.
+function calcularMovimientoCajaDisponible(mesYYYYMM) {
+  const disp = new Set((estado.productos || []).filter(p => p.disponible).map(p => p.id));
+  let mov = 0;
+  (estado.transacciones || []).forEach(t => {
+    if (!t.fecha || t.fecha.substring(0, 7) !== mesYYYYMM) return;
+    const m = t.monto || 0;
+    if (t.tipo === 'Ingreso' && disp.has(t.origen)) mov += m;
+    else if (t.tipo === 'Egreso' && disp.has(t.origen)) mov -= m;
+    else if (t.tipo === 'Traslado') {
+      if (disp.has(t.destino)) mov += m;
+      if (disp.has(t.origen)) mov -= m;
+    }
+  });
+  return mov;
+}
+
 function calcularDatosCierre(mesYYYYMM) {
   const op = calcularFlujoOperativo(mesYYYYMM);
   const fin = calcularFlujoFinanciero(mesYYYYMM);
   const mesSig = mesSiguiente(mesYYYYMM);
   const opSig = calcularFlujoOperativo(mesSig);
 
-  const saldoInicial = estado.productos
+  // Saldo disponible REAL al fin del mes cerrado = suma de Saldo_Cierre de las
+  // cuentas disponibles (lo congela el cierre = fin de ese mes).
+  const saldoFinal = estado.productos
     .filter(p => p.disponible && p.saldoCierre >= 0)
     .reduce((s, p) => s + p.saldoCierre, 0);
-  const saldoFinal = saldoInicial + op.neto + fin.neto;
+  // Saldo al INICIO del mes = saldo final − movimiento real de caja del mes.
+  // (Antes se usaba Saldo_Cierre como "inicio", pero tras cerrar el mes ese campo
+  //  ya es el saldo FINAL → daba inicio y fin equivocados.)
+  const movimientoCaja = calcularMovimientoCajaDisponible(mesYYYYMM);
+  const saldoInicial = saldoFinal - movimientoCaja;
 
   const gruposIng = [], gruposEgr = [];
   Object.entries(op.grupos).forEach(([grupo, g]) => {
@@ -2659,7 +2684,7 @@ function calcularDatosCierre(mesYYYYMM) {
 
   const notas = (estado.contexto || []).map(c => ({ categoria: c.categoria, consideracion: c.consideracion }));
 
-  return { mes: mesYYYYMM, mesSig, saldoInicial, saldoFinal, op, fin, gruposIng, gruposEgr, provisiones, notas };
+  return { mes: mesYYYYMM, mesSig, saldoInicial, saldoFinal, movimientoCaja, op, fin, gruposIng, gruposEgr, provisiones, notas };
 }
 
 // Arma el texto plano del paquete que ve la IA, a partir del objeto de datos.
@@ -2687,8 +2712,10 @@ function construirPaqueteCierre(mesYYYYMM) {
   return `=== DATOS DEL CIERRE A ANALIZAR ===
 
 MES ANALIZADO: ${d.mes}
-Saldo de caja inicio de mes: ${fmt(d.saldoInicial)}
-Saldo de caja fin de mes (proyectado): ${fmt(d.saldoFinal)}
+Saldo de caja disponible al INICIO del mes: ${fmt(d.saldoInicial)}
+Saldo de caja disponible al FIN del mes (real): ${fmt(d.saldoFinal)}
+Movimiento real de caja del mes: ${fmt(d.movimientoCaja)}
+(El NETO OPERATIVO de abajo es devengado —incluye consumos de TC del mes que aún no salen de la caja—, por eso no cuadra al peso con el movimiento real de caja. Para juzgar liquidez, usa el movimiento real de caja y el saldo fin de mes.)
 
 ── FLUJO OPERATIVO (real vs presupuesto) ──
 INGRESOS:
@@ -2808,7 +2835,7 @@ function descargarCierreHTML() {
 
 <div class="resumen">
   <div><div class="lbl">Saldo inicio de mes</div><div class="val">${fmt(d.saldoInicial)}</div></div>
-  <div><div class="lbl">Saldo fin de mes (proy.)</div><div class="val">${fmt(d.saldoFinal)}</div></div>
+  <div><div class="lbl">Saldo fin de mes (real)</div><div class="val">${fmt(d.saldoFinal)}</div></div>
   <div><div class="lbl">Neto operativo real</div><div class="val">${fmt(d.op.netoReal)}</div></div>
   <div><div class="lbl">Neto financiero real</div><div class="val">${fmt(d.fin.netoReal)}</div></div>
 </div>
@@ -4525,9 +4552,10 @@ function calcularFlujoOperativo(mesYYYYMM) {
     estado.transacciones.forEach(t => {
       if (!t.fecha || t.fecha.substring(0, 7) !== mesYYYYMM) return;
       if (t.tipo !== 'Ingreso' && t.tipo !== 'Egreso') return;
-      // El rendimiento LP no toca caja: vive SOLO en el flujo financiero, no en el operativo.
+      // Rendimiento LP y costo financiero NO van en el operativo: pertenecen al
+      // flujo financiero. Si se cuentan aquí también, quedan duplicados.
       const gRLP = estado.grupos.find(x => x.grupo === t.grupo && x.subgrupo === t.subgrupo);
-      if (gRLP && gRLP.esRendimientoLP) return;
+      if (gRLP && (gRLP.esRendimientoLP || gRLP.esCostoFinanciero)) return;
       const esIngreso = t.tipo === 'Ingreso';
 
       const grupo = t.grupo || 'Sin grupo';
