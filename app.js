@@ -2768,6 +2768,67 @@ ${paquete}`;
   enviarMensajeChat(instruccion, { esCierre: true });
 }
 
+// ── PARTE B: TRASLADO DE PROVISIONES AL MES SIGUIENTE (jul2026) ────────
+// Calcula (determinísticamente) cuánto del sobrante de cada provisión rodante
+// se puede trasladar al presupuesto del mes siguiente (topado por Tope_Provision),
+// y lo muestra para aprobar rubro por rubro. La escritura vive en la Pieza B2.
+let traslProvDatos = null;
+
+function abrirTrasladoProvisiones() {
+  if (!estado.grupos || !estado.grupos.length) { mostrarToast('⚠️ Datos aún no cargados, intenta en un momento'); return; }
+  const mes = mesUltimoCierre();
+  const mesSig = mesSiguiente(mes);
+  const d = calcularDatosCierre(mes);
+  const items = d.provisiones.map(p => {
+    const trasladable = Math.max(0, p.sobrante - p.excedente); // sobrante menos lo que exceda el tope
+    return { grupo: p.grupo, subgrupo: p.subgrupo, sobrante: p.sobrante,
+      sobregiro: p.sobregiro, tope: p.tope, pptoSig: p.pptoSig,
+      trasladable, totalSig: p.pptoSig + trasladable };
+  });
+  traslProvDatos = { mes, mesSig, items };
+  cambiarVista('asistente');
+  renderPanelTrasladoProvisiones();
+}
+
+function renderPanelTrasladoProvisiones() {
+  if (!traslProvDatos) return;
+  const { mes, mesSig, items } = traslProvDatos;
+  const filas = items.map((i, idx) => {
+    if (i.trasladable > 0) {
+      return `<label style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 10px;margin:6px 0;background:var(--bg3);border-radius:8px;cursor:pointer">
+        <input type="checkbox" class="tp-check" data-idx="${idx}" checked style="width:16px;height:16px" />
+        <strong style="flex:1;min-width:160px">${i.grupo} › ${i.subgrupo}</strong>
+        <span style="color:var(--acento);font-weight:600">trasladar ${fmt(i.trasladable)}</span>
+        <span style="width:100%;font-size:12px;color:var(--texto2)">${mesSig}: ${fmt(i.pptoSig)} → ${fmt(i.totalSig)} (tope ${fmt(i.tope)})</span>
+      </label>`;
+    }
+    const razon = i.sobregiro > 0 ? `sobregiro ${fmt(i.sobregiro)}` : (i.sobrante <= 0 ? 'sin sobrante' : 'ya en el tope');
+    return `<div style="display:flex;justify-content:space-between;gap:6px;padding:8px 10px;margin:6px 0;background:var(--bg3);border-radius:8px;opacity:.6">
+      <span>${i.grupo} › ${i.subgrupo}</span><span style="font-size:12px;color:var(--texto2)">— sin traslado (${razon})</span>
+    </div>`;
+  }).join('');
+  const totalTrasl = items.reduce((s, i) => s + i.trasladable, 0);
+  const cont = document.getElementById('chat-mensajes');
+  const wrap = document.createElement('div');
+  wrap.className = 'chat-msg asistente';
+  wrap.style.background = 'transparent';
+  wrap.innerHTML = `<div style="border:1px solid var(--borde,#ccc);border-radius:10px;padding:14px">
+    <div style="font-weight:700;margin-bottom:4px">🔁 Traslado de provisiones ${mes} → ${mesSig}</div>
+    <div style="font-size:13px;color:var(--texto2);margin-bottom:8px">Marca los rubros que quieras trasladar; la app ya calculó el monto (sobrante, topado). Total propuesto: <strong>${fmt(totalTrasl)}</strong>.</div>
+    ${filas}
+    <button class="btn-descargar-cierre" onclick="aplicarTrasladoProvisiones()" style="margin-top:12px">✓ Aplicar traslados aprobados</button>
+    <div style="font-size:12px;color:var(--texto2);margin-top:8px">Al aplicar, se agrega una fila "Traslado provisión" en el presupuesto de ${mesSig} de cada rubro aprobado. <em>(La escritura se habilita en la Pieza B2.)</em></div>
+  </div>`;
+  cont.appendChild(wrap);
+  cont.scrollTop = cont.scrollHeight;
+}
+
+function aplicarTrasladoProvisiones() {
+  // Pieza B2: aquí irá la escritura de las filas de traslado en la hoja Presupuesto.
+  const marcados = Array.from(document.querySelectorAll('.tp-check:checked')).length;
+  mostrarToast(`(B1) ${marcados} traslado(s) marcado(s). La escritura se habilita en la Pieza B2.`);
+}
+
 // Toma el último mensaje del asistente del chat (el análisis recién generado).
 function ultimaRespuestaAsistente() {
   for (let i = chatHistorial.length - 1; i >= 0; i--) {
