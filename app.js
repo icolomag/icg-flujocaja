@@ -3185,16 +3185,26 @@ function inicializarPresupuesto() {
   // Botón "Generar mes siguiente": clona el último mes presupuestado hacia el
   // mes que le sigue, para mantener siempre 12 meses poblados (evita que la ola
   // muestre operativo en 0 al entrar un mes nuevo por el borde). Se inyecta una
-  // sola vez, debajo del botón Cargar.
-  if (!document.getElementById('btn-generar-mes-ppto')) {
-    const cargarBtn = document.getElementById('btn-cargar-ppto');
-    const gen = document.createElement('button');
-    gen.id = 'btn-generar-mes-ppto';
-    gen.textContent = '➕ Generar mes siguiente';
-    gen.title = 'Crea el mes que sigue al último presupuestado, copiando sus rubros';
-    gen.style.marginLeft = '8px';
-    gen.addEventListener('click', function () { generarMesSiguientePpto(this); });
-    cargarBtn.insertAdjacentElement('afterend', gen);
+  // sola vez, en su propia fila arriba de la zona de resultados (con ancho
+  // propio para que no quede aplastado por el contenedor del selector).
+  if (!document.getElementById('fila-generar-mes-ppto')) {
+    const zonaResultado = document.getElementById('ppto-resultado');
+    if (zonaResultado) {
+      const fila = document.createElement('div');
+      fila.id = 'fila-generar-mes-ppto';
+      fila.style.margin = '12px 0';
+      const gen = document.createElement('button');
+      gen.id = 'btn-generar-mes-ppto';
+      gen.className = 'btn-primario';
+      gen.textContent = '➕ Generar mes siguiente del presupuesto';
+      gen.title = 'Crea el mes que sigue al último presupuestado, copiando sus rubros';
+      gen.style.display = 'inline-block';
+      gen.style.width = 'auto';
+      gen.style.padding = '10px 16px';
+      gen.addEventListener('click', function () { generarMesSiguientePpto(this); });
+      fila.appendChild(gen);
+      zonaResultado.insertAdjacentElement('beforebegin', fila);
+    }
   }
 }
 
