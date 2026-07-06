@@ -96,6 +96,18 @@ async function escribirFila(hoja, valores) {
   return res.json();
 }
 
+// Escribe VARIAS filas de una sola vez (una única llamada al Sheet).
+// 'filas' es un arreglo de filas; cada fila es un arreglo de celdas.
+async function escribirFilas(hoja, filas) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(hoja)}:append?valueInputOption=USER_ENTERED`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${estado.accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values: filas })
+  });
+  return res.json();
+}
+
 async function actualizarCelda(rango, valor) {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SHEET_ID}/values/${encodeURIComponent(rango)}?valueInputOption=USER_ENTERED`;
   await fetch(url, {
@@ -3169,6 +3181,98 @@ function inicializarPresupuesto() {
   const btn = document.getElementById('btn-cargar-ppto');
   btn.replaceWith(btn.cloneNode(true));
   document.getElementById('btn-cargar-ppto').addEventListener('click', cargarComparativo);
+
+  // Botón "Generar mes siguiente": clona el último mes presupuestado hacia el
+  // mes que le sigue, para mantener siempre 12 meses poblados (evita que la ola
+  // muestre operativo en 0 al entrar un mes nuevo por el borde). Se inyecta una
+  // sola vez, debajo del botón Cargar.
+  if (!document.getElementById('btn-generar-mes-ppto')) {
+    const cargarBtn = document.getElementById('btn-cargar-ppto');
+    const gen = document.createElement('button');
+    gen.id = 'btn-generar-mes-ppto';
+    gen.textContent = '➕ Generar mes siguiente';
+    gen.title = 'Crea el mes que sigue al último presupuestado, copiando sus rubros';
+    gen.style.marginLeft = '8px';
+    gen.addEventListener('click', function () { generarMesSiguientePpto(this); });
+    cargarBtn.insertAdjacentElement('afterend', gen);
+  }
+}
+
+// Detecta el último mes que ya tiene presupuesto y crea el mes siguiente
+// clonando sus filas base (salta las de "Traslado provisión", que son
+// circunstanciales). Candado anti-duplicado: si el mes destino ya existe, avisa
+// y no escribe nada. Escribe todo en una sola llamada al Sheet.
+async function generarMesSiguientePpto(btn) {
+  const textoOrig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Calculando...'; }
+  mostrarSpinner(true);
+  try {
+    const filas = await leerHoja('Presupuesto!A2:F');
+    if (!filas.length) {
+      mostrarSpinner(false);
+      if (btn) { btn.disabled = false; btn.textContent = textoOrig; }
+      mostrarToast('⚠️ El presupuesto está vacío, no hay mes que clonar');
+      return;
+    }
+
+    // Último mes presupuestado (YYYY-MM), leído de la columna Fecha.
+    let ultimoMes = '';
+    for (const fr of filas) {
+      const m = (fr[0] || '').substring(0, 7);
+      if (/^\d{4}-\d{2}$/.test(m) && m > ultimoMes) ultimoMes = m;
+    }
+    if (!ultimoMes) {
+      mostrarSpinner(false);
+      if (btn) { btn.disabled = false; btn.textContent = textoOrig; }
+      mostrarToast('⚠️ No pude identificar el último mes del presupuesto');
+      return;
+    }
+
+    // Mes siguiente = último + 1 mes.
+    const [ay, am] = ultimoMes.split('-').map(Number);
+    const dSig = new Date(ay, am, 1); // am (1-12) como índice avanza un mes
+    const mesSig = `${dSig.getFullYear()}-${String(dSig.getMonth() + 1).padStart(2, '0')}`;
+
+    // Candado anti-duplicado: si ya hay filas del mes siguiente, no hacemos nada.
+    const yaExiste = filas.some(fr => (fr[0] || '').substring(0, 7) === mesSig);
+    if (yaExiste) {
+      mostrarSpinner(false);
+      if (btn) { btn.disabled = false; btn.textContent = textoOrig; }
+      mostrarToast(`✓ El presupuesto de ${mesSig} ya existe. No se duplicó nada.`);
+      return;
+    }
+
+    // Filas base del último mes (se saltan los traslados de provisión).
+    const fechaSig = `${mesSig}-01`;
+    const nuevas = filas
+      .filter(fr => (fr[0] || '').substring(0, 7) === ultimoMes)
+      .filter(fr => !((fr[5] || '').toLowerCase().includes('traslado provisión')))
+      .map(fr => [fechaSig, fr[1] || '', fr[2] || '', fr[3] || '', fr[4] || '', fr[5] || '']);
+
+    if (!nuevas.length) {
+      mostrarSpinner(false);
+      if (btn) { btn.disabled = false; btn.textContent = textoOrig; }
+      mostrarToast(`⚠️ El mes ${ultimoMes} no tiene filas base para clonar`);
+      return;
+    }
+
+    if (!confirm(`Se creará el presupuesto de ${mesSig} copiando ${nuevas.length} rubro(s) desde ${ultimoMes}. Podrás ajustarlo después. ¿Continuar?`)) {
+      mostrarSpinner(false);
+      if (btn) { btn.disabled = false; btn.textContent = textoOrig; }
+      return;
+    }
+
+    await escribirFilas('Presupuesto', nuevas);
+    await cargarDatos();
+    mostrarSpinner(false);
+    if (btn) { btn.disabled = false; btn.textContent = textoOrig; }
+    mostrarToast(`✓ Presupuesto de ${mesSig} creado con ${nuevas.length} rubro(s) desde ${ultimoMes}. Revísalo y ajusta lo que necesites.`);
+  } catch (e) {
+    mostrarSpinner(false);
+    if (btn) { btn.disabled = false; btn.textContent = textoOrig || '➕ Generar mes siguiente'; }
+    mostrarToast('Error al generar el mes: ' + e.message);
+    console.error(e);
+  }
 }
 
 // Nivel de zoom activo de la vista de presupuesto: 'resumen' | 'grupos' | 'subgrupos'
