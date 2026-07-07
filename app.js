@@ -2798,7 +2798,6 @@ function abrirTrasladoProvisiones() {
       trasladable, totalSig: p.pptoSig + trasladable };
   });
   traslProvDatos = { mes, mesSig, items };
-  cambiarVista('asistente');
   renderPanelTrasladoProvisiones();
 }
 
@@ -2820,19 +2819,16 @@ function renderPanelTrasladoProvisiones() {
     </div>`;
   }).join('');
   const totalTrasl = items.reduce((s, i) => s + i.trasladable, 0);
-  const cont = document.getElementById('chat-mensajes');
-  const wrap = document.createElement('div');
-  wrap.className = 'chat-msg asistente';
-  wrap.style.background = 'transparent';
-  wrap.innerHTML = `<div class="tp-panel" style="border:1px solid var(--borde,#ccc);border-radius:10px;padding:14px">
+  const cont = document.getElementById('traslado-provisiones-panel');
+  if (!cont) { mostrarToast('⚠️ No se encontró el panel de traslado'); return; }
+  cont.innerHTML = `<div class="tp-panel" style="border:1px solid var(--borde,#ccc);border-radius:10px;padding:14px;margin-top:14px">
     <div style="font-weight:700;margin-bottom:4px">🔁 Traslado de provisiones ${mes} → ${mesSig}</div>
     <div style="font-size:13px;color:var(--texto2);margin-bottom:8px">Marca los rubros que quieras trasladar; la app ya calculó el monto (sobrante, topado). Total propuesto: <strong>${fmt(totalTrasl)}</strong>.</div>
     ${filas}
     <button class="btn-descargar-cierre" onclick="aplicarTrasladoProvisiones(this)" style="margin-top:12px">✓ Aplicar traslados aprobados</button>
-    <div style="font-size:12px;color:var(--texto2);margin-top:8px">Al aplicar, se agrega una fila "Traslado provisión" en el presupuesto de ${mesSig} de cada rubro aprobado. <em>(La escritura se habilita en la Pieza B2.)</em></div>
+    <div style="font-size:12px;color:var(--texto2);margin-top:8px">Al aplicar, se agrega una fila "Traslado provisión" en el presupuesto de ${mesSig} de cada rubro aprobado.</div>
   </div>`;
-  cont.appendChild(wrap);
-  cont.scrollTop = cont.scrollHeight;
+  cont.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 async function aplicarTrasladoProvisiones(btn) {
