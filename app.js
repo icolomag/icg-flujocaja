@@ -4095,6 +4095,32 @@ async function guardarCierre() {
       await actualizarCelda(`Productos!G${i + 2}`, saldoCongelar);
     }
 
+    // Registrar el patrimonio neto financiero del cierre en PatrimonioHistorico.
+    // Usa la MISMA fórmula del dashboard (misma clasificación de disponibles,
+    // inversiones y deudas) sobre los saldos ya congelados, para que el punto
+    // del histórico coincida exactamente con lo que muestra el dashboard.
+    // Candado anti-duplicado: si ya existe una fila para este mes, no agrega otra.
+    try {
+      const filasHist = await leerHoja('PatrimonioHistorico!A2:D');
+      const yaExiste = filasHist.some(fr => (fr[0] || '') === mes);
+      if (!yaExiste) {
+        const disp = estado.productos.filter(p => p.disponible && p.saldoActual >= 0);
+        const inv = estado.productos.filter(p => !p.disponible && p.saldoActual > 0 &&
+          ['Inversión LP', 'Inversión Internacional', 'Inversión'].some(t => p.tipo.includes(t)));
+        const deu = estado.productos.filter(p => p.saldoActual < 0);
+        const patrimonio =
+          disp.reduce((s, p) => s + p.saldoActual, 0) +
+          inv.reduce((s, p) => s + p.saldoActual, 0) +
+          deu.reduce((s, p) => s + p.saldoActual, 0);
+        await escribirFila('PatrimonioHistorico', [
+          mes, fechaCierre, patrimonio, `Cierre ${mes}`
+        ]);
+      }
+    } catch (e) {
+      // No bloquear el cierre si falla el histórico; solo avisar en consola.
+      console.error('No se pudo registrar el patrimonio histórico:', e);
+    }
+
     // Actualizar la fecha de último cierre en Config
     await actualizarCelda('Config!B2', fechaCierre);
 
