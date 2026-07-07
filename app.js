@@ -484,14 +484,15 @@ function descartarCorreo(gmailId) {
 async function cargarDatos() {
   mostrarSpinner(true);
   try {
-    const [filasProductos, filasGrupos, filasTx, filasPpto, filasContexto, filasConfig, filasCuotas] = await Promise.all([
+    const [filasProductos, filasGrupos, filasTx, filasPpto, filasContexto, filasConfig, filasCuotas, filasPatrimonio] = await Promise.all([
       leerHoja('Productos!A2:R'),
       leerHoja('Grupos!A2:I'),
       leerHoja('Transacciones!A2:M'),
       leerHoja('Presupuesto!A2:F'),
       leerHoja('Contexto!A2:C'),
       leerHoja('Config!A2:B'),
-      leerHoja('Calendario_Deuda!A2:N')
+      leerHoja('Calendario_Deuda!A2:N'),
+      leerHoja('PatrimonioHistorico!A2:D').catch(() => [])
     ]);
 
     estado.productos = filasProductos.map(f => ({
@@ -525,6 +526,10 @@ async function cargarDatos() {
     estado.contexto = filasContexto
       .filter(f => f[0] && (f[2] || '').toString().toUpperCase() !== 'FALSE')
       .map(f => ({ categoria: f[0], consideracion: f[1] || '' }));
+
+    estado.patrimonioHistorico = (filasPatrimonio || [])
+      .filter(f => f[0] && f[2] !== '' && f[2] != null)
+      .map(f => ({ mes: (f[0] || '').toString().trim(), fechaCierre: f[1] || '', patrimonio: parseFloat(f[2]) || 0 }));
 
     estado.cuotasTC = filasCuotas.map(f => ({
       idCuota: f[0], idCompra: f[1], idTx: f[2],
@@ -580,6 +585,90 @@ function renderDashboard() {
   const elNeto = document.getElementById('pat-neto');
   elNeto.textContent = fmt(neto);
   elNeto.className = neto >= 0 ? 'verde' : 'rojo';
+
+  renderGraficoPatrimonio(neto);
+}
+
+// Dibuja la evolución del patrimonio neto financiero: los cierres guardados en
+// la hoja PatrimonioHistorico + el valor actual ("Actual") calculado en vivo.
+// Gráfico de líneas en SVG puro (sin librerías). netoHoy = patrimonio de hoy.
+function renderGraficoPatrimonio(netoHoy) {
+  const cont = document.getElementById('grafico-patrimonio');
+  if (!cont) return;
+
+  // Puntos históricos (de la hoja) + el punto "Actual" en vivo.
+  const hist = (estado.patrimonioHistorico || []).slice().sort((a, b) => a.mes.localeCompare(b.mes));
+  const nombreMes = { '01': 'ene', '02': 'feb', '03': 'mar', '04': 'abr', '05': 'may', '06': 'jun',
+                      '07': 'jul', '08': 'ago', '09': 'sep', '10': 'oct', '11': 'nov', '12': 'dic' };
+  const etiqueta = (m) => {
+    const [a, mm] = (m || '').split('-');
+    return (nombreMes[mm] || mm) + ' ' + (a || '').slice(2);
+  };
+
+  const puntos = hist.map(h => ({ label: etiqueta(h.mes), valor: h.patrimonio }));
+  puntos.push({ label: 'Actual', valor: netoHoy });
+
+  if (puntos.length < 2) {
+    cont.innerHTML = `<p style="color:var(--texto2);font-size:13px">Aún no hay suficientes cierres para graficar la evolución. El gráfico se irá llenando con cada cierre de mes.</p>`;
+    return;
+  }
+
+  // Dimensiones del lienzo
+  const W = 640, H = 280, mL = 70, mR = 20, mT = 24, mB = 40;
+  const plotW = W - mL - mR, plotH = H - mT - mB;
+
+  const valores = puntos.map(p => p.valor);
+  let vMin = Math.min(...valores), vMax = Math.max(...valores);
+  if (vMin === vMax) { vMin -= 1; vMax += 1; }
+  // Un respiro arriba y abajo (10%)
+  const pad = (vMax - vMin) * 0.1;
+  vMin -= pad; vMax += pad;
+
+  const x = (i) => mL + (puntos.length === 1 ? plotW / 2 : (plotW * i) / (puntos.length - 1));
+  const y = (v) => mT + plotH * (1 - (v - vMin) / (vMax - vMin));
+
+  // Línea del cero (si el rango la cruza), útil porque el patrimonio es negativo
+  let lineaCero = '';
+  if (vMin < 0 && vMax > 0) {
+    const y0 = y(0);
+    lineaCero = `<line x1="${mL}" y1="${y0}" x2="${W - mR}" y2="${y0}" stroke="var(--texto2)" stroke-dasharray="4 4" stroke-width="1" opacity="0.5"/>`;
+  }
+
+  // Formato corto para los ejes: millones con un decimal (ej. -54,2M)
+  const fmtCorto = (v) => {
+    const m = v / 1e6;
+    return (m >= 0 ? '' : '-') + '$' + Math.abs(m).toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + 'M';
+  };
+
+  // Marcas del eje Y (5 líneas guía)
+  let ejeY = '';
+  const nY = 4;
+  for (let k = 0; k <= nY; k++) {
+    const v = vMin + ((vMax - vMin) * k) / nY;
+    const yy = y(v);
+    ejeY += `<line x1="${mL}" y1="${yy}" x2="${W - mR}" y2="${yy}" stroke="var(--borde,#ccc)" stroke-width="0.5" opacity="0.4"/>`;
+    ejeY += `<text x="${mL - 8}" y="${yy + 4}" text-anchor="end" font-size="11" fill="var(--texto2)">${fmtCorto(v)}</text>`;
+  }
+
+  // Trazo de la línea + puntos + etiquetas de valor
+  const pathD = puntos.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(p.valor).toFixed(1)}`).join(' ');
+  let marcadores = '';
+  puntos.forEach((p, i) => {
+    const px = x(i), py = y(p.valor);
+    const esActual = i === puntos.length - 1;
+    marcadores += `<circle cx="${px}" cy="${py}" r="${esActual ? 5 : 4}" fill="${esActual ? 'var(--acento,#2563eb)' : 'var(--texto,#333)'}"/>`;
+    // Valor encima del punto
+    marcadores += `<text x="${px}" y="${py - 12}" text-anchor="middle" font-size="11" font-weight="600" fill="var(--texto,#333)">${fmtCorto(p.valor)}</text>`;
+    // Etiqueta del mes en el eje X
+    marcadores += `<text x="${px}" y="${H - mB + 22}" text-anchor="middle" font-size="12" fill="var(--texto2)" ${esActual ? 'font-weight="700"' : ''}>${p.label}</text>`;
+  });
+
+  cont.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="max-width:${W}px">
+    ${ejeY}
+    ${lineaCero}
+    <path d="${pathD}" fill="none" stroke="var(--acento,#2563eb)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${marcadores}
+  </svg>`;
 }
 
 function renderCards(contenedorId, productos) {
