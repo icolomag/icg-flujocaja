@@ -1105,3 +1105,23 @@ tr:hover td { background: var(--bg2); }
   margin-top: 4px;
 }
 .tablero-grupo-tit:first-child { border-top: none; margin-top: 0; }
+
+
+/* ===== Ajuste responsive: header compacto en celular ===== */
+@media (max-width: 600px) {
+  header {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  .header-left {
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .header-logo img {
+    height: 28px;
+  }
+  .header-titulo {
+    font-size: 15px;
+    white-space: nowrap;
+  }
+}
