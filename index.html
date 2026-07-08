@@ -54,6 +54,7 @@
           <button class="nav-btn" data-vista="historial">📋 Historial</button>
           <button class="nav-btn" data-vista="presupuesto">📊 vs Presupuesto</button>
           <button class="nav-btn" data-vista="proyeccion">📈 Proyección</button>
+          <button class="nav-btn" data-vista="tablero">🔎 Tablero</button>
         </div>
       </div>
       <div class="nav-grupo" data-grupo="registrar">
@@ -638,6 +639,41 @@
           <button id="btn-descargar-ppto" class="btn-secundario">⬇ Descargar Excel</button>
         </div>
         <div id="ppto-vista-tabla" style="overflow-x:auto;margin-top:16px"></div>
+      </div>
+
+      <!-- VISTA: TABLERO DE CONSULTA (BI determinístico) -->
+      <div id="vista-tablero" class="vista oculto">
+        <h2>Tablero de consulta</h2>
+        <p style="color:var(--texto2);font-size:13px;margin-bottom:16px">
+          Consulta uno o varios subgrupos por uno o varios meses (presupuestado y/o real). Cifras al peso, sin IA.
+        </p>
+
+        <div class="tablero-panel">
+          <div class="tablero-bloque">
+            <label class="tablero-label">Meses</label>
+            <div id="tablero-meses" class="tablero-chips"></div>
+          </div>
+
+          <div class="tablero-bloque">
+            <label class="tablero-label">Subgrupos</label>
+            <input type="text" id="tablero-buscar" class="tablero-buscar" placeholder="Escribe para filtrar…" oninput="tableroFiltrar()" />
+            <div id="tablero-subs" class="tablero-lista"></div>
+            <button class="btn-secundario tablero-mini" onclick="tableroLimpiarSubs()">Limpiar selección</button>
+          </div>
+
+          <div class="tablero-bloque">
+            <label class="tablero-label">Dato a mostrar</label>
+            <div class="tablero-dato">
+              <button class="tablero-dato-btn" data-dato="ppto" onclick="tableroSetDato('ppto')">Presupuesto</button>
+              <button class="tablero-dato-btn" data-dato="real" onclick="tableroSetDato('real')">Real</button>
+              <button class="tablero-dato-btn activo" data-dato="ambos" onclick="tableroSetDato('ambos')">Ambos</button>
+            </div>
+          </div>
+
+          <button class="btn-primario" onclick="generarTablero()">Consultar</button>
+        </div>
+
+        <div id="tablero-resultado" style="margin-top:20px"></div>
       </div>
 
     </main>
