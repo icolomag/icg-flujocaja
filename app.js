@@ -5524,6 +5524,26 @@ function tableroSubgruposDisponibles() {
   return Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
 }
 
+// Devuelve los grupos con sus subgrupos consultables, para pintar la lista
+// agrupada. Un subgrupo se asigna a su grupo segun la hoja Grupos; si no
+// aparece ahi, cae en 'Otros'. Los grupos y sus subgrupos van alfabeticos.
+function tableroSubgruposPorGrupo() {
+  const subs = tableroSubgruposDisponibles();
+  const grupoDe = {};
+  (estado.grupos || []).forEach(g => {
+    if (g.subgrupo && !(g.subgrupo in grupoDe)) grupoDe[g.subgrupo] = g.grupo || 'Otros';
+  });
+  const mapa = {};
+  subs.forEach(s => {
+    const g = grupoDe[s] || 'Otros';
+    if (!mapa[g]) mapa[g] = [];
+    mapa[g].push(s);
+  });
+  return Object.keys(mapa)
+    .sort((a, b) => a.localeCompare(b, 'es'))
+    .map(g => ({ grupo: g, subgrupos: mapa[g].sort((a, b) => a.localeCompare(b, 'es')) }));
+}
+
 function tableroMesLabel(yyyymm) {
   const d = new Date(yyyymm + '-02');
   return d.toLocaleDateString('es-CO', { month: 'short', year: 'numeric' });
@@ -5557,13 +5577,20 @@ function renderTableroMeses() {
 function renderTableroSubs(filtro) {
   const cont = document.getElementById('tablero-subs');
   const f = (filtro || '').toLowerCase().trim();
-  const subs = tableroSubgruposDisponibles().filter(s => !f || s.toLowerCase().includes(f));
-  if (subs.length === 0) { cont.innerHTML = '<span style="color:var(--texto2)">Sin coincidencias.</span>'; return; }
-  cont.innerHTML = subs.map(s => {
-    const marcado = tableroSubsSel.includes(s);
-    const id = 'tbsub-' + s.replace(/[^a-zA-Z0-9]/g, '_');
-    return `<label class="tablero-check"><input type="checkbox" id="${id}" ${marcado ? 'checked' : ''} onchange="tableroToggleSub(this, ${JSON.stringify(s).replace(/"/g, '&quot;')})"> ${s}</label>`;
-  }).join('');
+  const grupos = tableroSubgruposPorGrupo();
+  let html = '';
+  grupos.forEach(bloque => {
+    const visibles = bloque.subgrupos.filter(s => !f || s.toLowerCase().includes(f));
+    if (visibles.length === 0) return;
+    html += `<div class="tablero-grupo-tit">${bloque.grupo}</div>`;
+    html += visibles.map(s => {
+      const marcado = tableroSubsSel.includes(s);
+      const id = 'tbsub-' + s.replace(/[^a-zA-Z0-9]/g, '_');
+      return `<label class="tablero-check"><input type="checkbox" id="${id}" ${marcado ? 'checked' : ''} onchange="tableroToggleSub(this, ${JSON.stringify(s).replace(/"/g, '&quot;')})"> ${s}</label>`;
+    }).join('');
+  });
+  if (!html) { cont.innerHTML = '<span style="color:var(--texto2)">Sin coincidencias.</span>'; return; }
+  cont.innerHTML = html;
 }
 
 function tableroToggleMes(m) {
