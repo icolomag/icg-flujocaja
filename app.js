@@ -1898,6 +1898,7 @@ function cambiarVista(vista) {
   if (vista === 'notas') inicializarNotas();
   if (vista === 'extracto') inicializarExtracto();
   if (vista === 'ppto-vista') inicializarPptoVista();
+  if (vista === 'tablero') inicializarTablero();
   if (vista === 'abono-tc') inicializarAbonoTC();
   // Cierra el menú desplegable y resalta el grupo que contiene la vista activa
   cerrarMenusNav();
@@ -5487,6 +5488,236 @@ function movimientoEnProducto(t, id) {
 function abrirExtractoProducto(productoId) {
   cambiarVista('extracto');
   inicializarExtracto(productoId);
+}
+
+// ── TABLERO DE CONSULTA (BI determinístico, sin IA) ───────────────────
+// Consulta cruzada de uno o varios subgrupos por uno o varios meses, con
+// dato Presupuesto / Real / Ambos. Se apoya 100% en calcularFlujoOperativo
+// (que ya cruza ppto vs real por subgrupo, e incluye costo financiero real
+// y rendimientos LP reales). No llama a la IA.
+let tableroMesesSel = [];   // meses marcados (YYYY-MM)
+let tableroSubsSel = [];     // subgrupos marcados (nombre de texto)
+let tableroDato = 'ambos';   // 'ppto' | 'real' | 'ambos'
+let tableroUltimaMatriz = null; // para descarga Excel
+
+// Devuelve la lista ordenada de meses (YYYY-MM) que tienen presupuesto O real.
+function tableroMesesDisponibles() {
+  const set = new Set();
+  (estado.presupuesto || []).forEach(p => {
+    if (p.fecha && p.fecha.length >= 7) set.add(p.fecha.substring(0, 7));
+  });
+  (estado.transacciones || []).forEach(t => {
+    if ((t.tipo === 'Ingreso' || t.tipo === 'Egreso') && t.fecha && t.fecha.length >= 7)
+      set.add(t.fecha.substring(0, 7));
+  });
+  return Array.from(set).sort();
+}
+
+// Devuelve la lista ordenada (alfabética) de subgrupos que aparecen en
+// presupuesto o en transacciones (universo consultable).
+function tableroSubgruposDisponibles() {
+  const set = new Set();
+  (estado.presupuesto || []).forEach(p => { if (p.subgrupo) set.add(p.subgrupo); });
+  (estado.transacciones || []).forEach(t => {
+    if ((t.tipo === 'Ingreso' || t.tipo === 'Egreso') && t.subgrupo) set.add(t.subgrupo);
+  });
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
+}
+
+function tableroMesLabel(yyyymm) {
+  const d = new Date(yyyymm + '-02');
+  return d.toLocaleDateString('es-CO', { month: 'short', year: 'numeric' });
+}
+
+function inicializarTablero() {
+  tableroMesesSel = [];
+  tableroSubsSel = [];
+  tableroDato = 'ambos';
+  tableroUltimaMatriz = null;
+  document.getElementById('tablero-resultado').innerHTML = '';
+  const buscador = document.getElementById('tablero-buscar');
+  if (buscador) buscador.value = '';
+  renderTableroMeses();
+  renderTableroSubs('');
+  // Selector de dato
+  document.querySelectorAll('.tablero-dato-btn').forEach(b => {
+    b.classList.toggle('activo', b.dataset.dato === tableroDato);
+  });
+}
+
+function renderTableroMeses() {
+  const cont = document.getElementById('tablero-meses');
+  const meses = tableroMesesDisponibles();
+  if (meses.length === 0) { cont.innerHTML = '<span style="color:var(--texto2)">Sin meses con datos.</span>'; return; }
+  cont.innerHTML = meses.map(m =>
+    `<button class="tablero-chip ${tableroMesesSel.includes(m) ? 'activo' : ''}" data-mes="${m}" onclick="tableroToggleMes('${m}')">${tableroMesLabel(m)}</button>`
+  ).join('');
+}
+
+function renderTableroSubs(filtro) {
+  const cont = document.getElementById('tablero-subs');
+  const f = (filtro || '').toLowerCase().trim();
+  const subs = tableroSubgruposDisponibles().filter(s => !f || s.toLowerCase().includes(f));
+  if (subs.length === 0) { cont.innerHTML = '<span style="color:var(--texto2)">Sin coincidencias.</span>'; return; }
+  cont.innerHTML = subs.map(s => {
+    const marcado = tableroSubsSel.includes(s);
+    const id = 'tbsub-' + s.replace(/[^a-zA-Z0-9]/g, '_');
+    return `<label class="tablero-check"><input type="checkbox" id="${id}" ${marcado ? 'checked' : ''} onchange="tableroToggleSub(this, ${JSON.stringify(s).replace(/"/g, '&quot;')})"> ${s}</label>`;
+  }).join('');
+}
+
+function tableroToggleMes(m) {
+  const i = tableroMesesSel.indexOf(m);
+  if (i >= 0) tableroMesesSel.splice(i, 1); else tableroMesesSel.push(m);
+  tableroMesesSel.sort();
+  renderTableroMeses();
+}
+
+function tableroToggleSub(cb, nombre) {
+  const i = tableroSubsSel.indexOf(nombre);
+  if (cb.checked && i < 0) tableroSubsSel.push(nombre);
+  if (!cb.checked && i >= 0) tableroSubsSel.splice(i, 1);
+}
+
+function tableroFiltrar() {
+  renderTableroSubs(document.getElementById('tablero-buscar').value);
+}
+
+function tableroSetDato(d) {
+  tableroDato = d;
+  document.querySelectorAll('.tablero-dato-btn').forEach(b => {
+    b.classList.toggle('activo', b.dataset.dato === d);
+  });
+}
+
+function tableroLimpiarSubs() {
+  tableroSubsSel = [];
+  renderTableroSubs(document.getElementById('tablero-buscar').value);
+}
+
+// Arma la matriz subgrupo × mes y la pinta.
+function generarTablero() {
+  if (tableroMesesSel.length === 0) { mostrarToast('Elige al menos un mes.'); return; }
+  if (tableroSubsSel.length === 0) { mostrarToast('Elige al menos un subgrupo.'); return; }
+
+  const meses = tableroMesesSel.slice().sort();
+  const subs = tableroSubsSel.slice();
+
+  // Cache de flujos por mes (una sola pasada por mes).
+  const flujoPorMes = {};
+  meses.forEach(m => { flujoPorMes[m] = calcularFlujoOperativo(m); });
+
+  // Busca {ppto, real} de un subgrupo en un mes (recorre todos los grupos).
+  function celda(mes, sub) {
+    const f = flujoPorMes[mes];
+    let ppto = 0, real = 0, hay = false;
+    Object.values(f.grupos).forEach(g => {
+      const s = g.subgrupos[sub];
+      if (s) { ppto += s.ppto || 0; real += s.real || 0; hay = true; }
+    });
+    return { ppto, real, hay };
+  }
+
+  // Construye matriz para render + descarga.
+  const matriz = { meses, subs, dato: tableroDato, celdas: {}, totales: {} };
+  subs.forEach(sub => {
+    matriz.celdas[sub] = {};
+    meses.forEach(m => { matriz.celdas[sub][m] = celda(m, sub); });
+  });
+  meses.forEach(m => {
+    let tp = 0, tr = 0;
+    subs.forEach(sub => { tp += matriz.celdas[sub][m].ppto; tr += matriz.celdas[sub][m].real; });
+    matriz.totales[m] = { ppto: tp, real: tr };
+  });
+  tableroUltimaMatriz = matriz;
+
+  pintarTablero(matriz);
+}
+
+function pintarTablero(matriz) {
+  const { meses, subs, dato } = matriz;
+  const colspan = dato === 'ambos' ? 2 : 1;
+
+  // Encabezado: primera columna Subgrupo, luego cada mes (con sub-columnas si ambos).
+  let head1 = '<tr><th rowspan="2">Subgrupo</th>';
+  meses.forEach(m => { head1 += `<th colspan="${colspan}">${tableroMesLabel(m)}</th>`; });
+  head1 += '</tr>';
+
+  let head2 = '';
+  if (dato === 'ambos') {
+    head2 = '<tr>';
+    meses.forEach(() => { head2 += '<th>Ppto</th><th>Real</th>'; });
+    head2 += '</tr>';
+  }
+
+  const celdaTxt = (c) => {
+    if (dato === 'ppto') return `<td>${c.hay || c.ppto ? fmt(c.ppto) : '—'}</td>`;
+    if (dato === 'real') return `<td>${c.hay || c.real ? fmt(c.real) : '—'}</td>`;
+    return `<td>${c.ppto ? fmt(c.ppto) : '—'}</td><td>${c.real ? fmt(c.real) : '—'}</td>`;
+  };
+
+  let cuerpo = '';
+  subs.forEach(sub => {
+    cuerpo += `<tr><td>${sub}</td>`;
+    meses.forEach(m => { cuerpo += celdaTxt(matriz.celdas[sub][m]); });
+    cuerpo += '</tr>';
+  });
+
+  // Fila de totales
+  let total = '<tr class="fila-total"><td>TOTAL</td>';
+  meses.forEach(m => {
+    const t = matriz.totales[m];
+    if (dato === 'ppto') total += `<td>${fmt(t.ppto)}</td>`;
+    else if (dato === 'real') total += `<td>${fmt(t.real)}</td>`;
+    else total += `<td>${fmt(t.ppto)}</td><td>${fmt(t.real)}</td>`;
+  });
+  total += '</tr>';
+
+  const html = `
+    <div class="tablero-info">${subs.length} subgrupo(s) × ${meses.length} mes(es) · vista: ${dato === 'ambos' ? 'Ppto + Real' : (dato === 'ppto' ? 'Presupuesto' : 'Real')}</div>
+    <div style="overflow-x:auto">
+      <table class="tabla-ppto">
+        <thead>${head1}${head2}</thead>
+        <tbody>${cuerpo}${total}</tbody>
+      </table>
+    </div>
+    <button class="btn-secundario" style="margin-top:12px" onclick="descargarTablero()">⬇ Descargar Excel</button>
+  `;
+  document.getElementById('tablero-resultado').innerHTML = html;
+}
+
+function descargarTablero() {
+  if (!tableroUltimaMatriz) { mostrarToast('Primero genera una consulta.'); return; }
+  const { meses, subs, dato } = tableroUltimaMatriz;
+  const aoa = [];
+  // Encabezado
+  const h = ['Subgrupo'];
+  meses.forEach(m => {
+    if (dato === 'ambos') { h.push(tableroMesLabel(m) + ' Ppto'); h.push(tableroMesLabel(m) + ' Real'); }
+    else h.push(tableroMesLabel(m) + (dato === 'ppto' ? ' Ppto' : ' Real'));
+  });
+  aoa.push(h);
+  subs.forEach(sub => {
+    const row = [sub];
+    meses.forEach(m => {
+      const c = tableroUltimaMatriz.celdas[sub][m];
+      if (dato === 'ambos') { row.push(c.ppto); row.push(c.real); }
+      else row.push(dato === 'ppto' ? c.ppto : c.real);
+    });
+    aoa.push(row);
+  });
+  const rowT = ['TOTAL'];
+  meses.forEach(m => {
+    const t = tableroUltimaMatriz.totales[m];
+    if (dato === 'ambos') { rowT.push(t.ppto); rowT.push(t.real); }
+    else rowT.push(dato === 'ppto' ? t.ppto : t.real);
+  });
+  aoa.push(rowT);
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Consulta');
+  XLSX.writeFile(wb, 'ICG_Tablero_consulta.xlsx');
 }
 
 // ── PRESUPUESTO RODANTE 12 MESES ──────────────────────────────────────
