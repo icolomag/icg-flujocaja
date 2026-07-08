@@ -1020,3 +1020,77 @@ tr:hover td { background: var(--bg2); }
   line-height: 1.4;
 }
 .aviso-deuda strong { color: #5a3f00; }
+
+/* ── TABLERO DE CONSULTA (BI determinístico) ─────────────────────────── */
+.tablero-panel {
+  background: var(--bg2);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.tablero-bloque { display: flex; flex-direction: column; gap: 8px; }
+.tablero-label { font-size: 13px; color: var(--texto2); font-weight: 600; }
+.tablero-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.tablero-chip {
+  background: var(--bg3);
+  color: var(--texto);
+  border: 1px solid var(--borde);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tablero-chip:hover { border-color: var(--acento); }
+.tablero-chip.activo { background: var(--acento); border-color: var(--acento); color: #fff; }
+.tablero-buscar {
+  background: var(--bg);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 10px 12px;
+  color: var(--texto);
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.tablero-buscar:focus { outline: none; border-color: var(--acento); }
+.tablero-lista {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tablero-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+  color: var(--texto);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.tablero-check:hover { background: var(--bg3); }
+.tablero-check input { cursor: pointer; }
+.tablero-mini { align-self: flex-start; padding: 6px 12px !important; font-size: 12px !important; }
+.tablero-dato { display: flex; gap: 8px; flex-wrap: wrap; }
+.tablero-dato-btn {
+  background: var(--bg3);
+  color: var(--texto);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tablero-dato-btn:hover { border-color: var(--acento); }
+.tablero-dato-btn.activo { background: var(--acento); border-color: var(--acento); color: #fff; }
+.tablero-info { font-size: 12px; color: var(--texto2); margin-bottom: 10px; }
