@@ -1094,3 +1094,14 @@ tr:hover td { background: var(--bg2); }
 .tablero-dato-btn:hover { border-color: var(--acento); }
 .tablero-dato-btn.activo { background: var(--acento); border-color: var(--acento); color: #fff; }
 .tablero-info { font-size: 12px; color: var(--texto2); margin-bottom: 10px; }
+.tablero-grupo-tit {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--acento);
+  font-weight: 700;
+  padding: 10px 8px 4px;
+  border-top: 1px solid var(--borde);
+  margin-top: 4px;
+}
+.tablero-grupo-tit:first-child { border-top: none; margin-top: 0; }
