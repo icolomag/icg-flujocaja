@@ -1173,3 +1173,22 @@ tr:hover td { background: var(--bg2); }
   max-width: 420px;
   box-sizing: border-box;
 }
+
+
+/* ===== Señal visual: "desliza para ver más" en tablas anchas ===== */
+/* El contenedor .tabla-scroll-x envuelve tablas anchas y muestra una sombra
+   degradada a la derecha que indica que hay más columnas deslizando el dedo. */
+#extracto-tabla { overflow-x: auto; }
+
+.proyeccion-tabla,
+.tabla-contenedor,
+#extracto-tabla {
+  position: relative;
+  /* Sombra sutil en el borde derecho que aparece cuando hay contenido oculto.
+     Usa background-attachment local para que la sombra "desaparezca" al llegar al final. */
+  background:
+    linear-gradient(to right, var(--fondo) 30%, rgba(0,0,0,0)) 0 0 / 40px 100% no-repeat,
+    linear-gradient(to left, var(--fondo) 30%, rgba(0,0,0,0)) 100% 0 / 40px 100% no-repeat,
+    linear-gradient(to right, rgba(0,0,0,0.35), rgba(0,0,0,0)) 100% 0 / 24px 100% no-repeat;
+  background-attachment: local, local, scroll;
+}
