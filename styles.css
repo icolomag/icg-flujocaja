@@ -1158,3 +1158,18 @@ tr:hover td { background: var(--bg2); }
   font-family: ui-monospace, "SF Mono", "Segoe UI Mono", Menlo, Consolas, "Liberation Mono", monospace;
   font-variant-numeric: tabular-nums;
 }
+
+
+/* ===== Campo API key en pantalla de captura de imagen ===== */
+.apikey-bloque { margin-bottom: 20px; }
+.apikey-label {
+  display: block;
+  font-size: 12px;
+  color: var(--texto2);
+  margin-bottom: 6px;
+}
+.apikey-bloque .apikey-input {
+  width: 100%;
+  max-width: 420px;
+  box-sizing: border-box;
+}
