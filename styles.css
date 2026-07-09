@@ -1124,6 +1124,20 @@ tr:hover td { background: var(--bg2); }
     font-size: 15px;
     white-space: nowrap;
   }
+  /* Cifras grandes: reducir en celular para que no se salgan de su tarjeta */
+  .patrimonio-neto strong { font-size: 20px; }
+  .patrimonio-item strong,
+  .resumen-card .valor,
+  .extracto-saldo-box .valor { font-size: 18px; }
+  /* Protección general: cifras que no quepan se achican en vez de desbordarse */
+  .card-saldo,
+  .patrimonio-item strong,
+  .patrimonio-neto strong,
+  .resumen-card .valor,
+  .extracto-saldo-box .valor {
+    overflow-wrap: break-word;
+    min-width: 0;
+  }
 }
 
 
