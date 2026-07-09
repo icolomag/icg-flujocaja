@@ -1134,7 +1134,13 @@ tr:hover td { background: var(--bg2); }
 .movimiento-monto,
 .alerta-monto,
 .flujo-card-valor,
-.flujo-fila .num {
+.flujo-fila .num,
+.patrimonio-item strong,
+.patrimonio-neto strong,
+.resumen-card .valor,
+.extracto-saldo-box .valor,
+#total-disponible,
+#total-deudas {
   font-family: ui-monospace, "SF Mono", "Segoe UI Mono", Menlo, Consolas, "Liberation Mono", monospace;
   font-variant-numeric: tabular-nums;
 }
