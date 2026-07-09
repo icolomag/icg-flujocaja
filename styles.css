@@ -1125,3 +1125,16 @@ tr:hover td { background: var(--bg2); }
     white-space: nowrap;
   }
 }
+
+
+/* ===== Cifras: fuente monoespaciada del sistema + dígitos de ancho fijo ===== */
+/* Aplica a todos los montos/saldos para que las columnas queden alineadas */
+.card-saldo,
+.correo-monto,
+.movimiento-monto,
+.alerta-monto,
+.flujo-card-valor,
+.flujo-fila .num {
+  font-family: ui-monospace, "SF Mono", "Segoe UI Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
