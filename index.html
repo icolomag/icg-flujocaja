@@ -44,7 +44,6 @@
       </div>
       <div class="header-right">
         <span id="usuario-nombre"></span>
-        <input type="password" id="campo-apikey" placeholder="API key Claude" class="apikey-input" title="Pega tu API key de Anthropic" />
         <button id="btn-logout" class="btn-secundario">Salir</button>
       </div>
     </header>
@@ -385,6 +384,10 @@
         <p style="color:var(--texto2);font-size:13px;margin-bottom:20px">
           Sube una captura de pantalla de tu app bancaria. Claude extrae los movimientos y los concilia contra lo ya registrado.
         </p>
+        <div class="apikey-bloque">
+          <label for="campo-apikey" class="apikey-label">API key de Claude (necesaria para analizar imágenes)</label>
+          <input type="password" id="campo-apikey" placeholder="Pega aquí tu API key de Anthropic" class="apikey-input" title="Pega tu API key de Anthropic" />
+        </div>
         <div class="imagen-upload-area" id="imagen-upload-area">
           <input type="file" id="imagen-input" accept="image/*" style="display:none" />
           <div id="imagen-placeholder" class="imagen-placeholder">
