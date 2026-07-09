@@ -908,7 +908,8 @@ tr:hover td { background: var(--bg2); }
 .flujos-tabla {
   border: 1px solid var(--borde);
   border-radius: var(--radio);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .flujo-bloque-header {
@@ -1138,6 +1139,13 @@ tr:hover td { background: var(--bg2); }
     overflow-wrap: break-word;
     min-width: 0;
   }
+  /* Tabla central de flujo: darle ancho mínimo para que las 4 columnas
+     (Concepto/Ppto/Real/Desv.) quepan y se puedan ver deslizando */
+  .flujo-fila,
+  .flujo-fila.cols-header,
+  .flujo-bloque-header {
+    min-width: 480px;
+  }
 }
 
 
@@ -1182,6 +1190,7 @@ tr:hover td { background: var(--bg2); }
 
 .proyeccion-tabla,
 .tabla-contenedor,
+.flujos-tabla,
 #extracto-tabla {
   position: relative;
   /* Sombra sutil en el borde derecho que aparece cuando hay contenido oculto.
